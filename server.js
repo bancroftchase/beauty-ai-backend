@@ -46,6 +46,23 @@ const BEAUTY_PRODUCTS = [
     { id: 18, name: 'Vanilla Woods Perfume', brand: 'Glossier', price: '$60.00', country: 'USA', category: 'fragrance', subCategory: 'Perfume', description: 'Warm and cozy fragrance with vanilla, woods, and skin-like scent.', rating: 4.2, reviews: 654, trending: false, notes: ['Vanilla', 'Sandalwood', 'Musk'], keywords: 'glossier vanilla woods perfume cozy warm' }
 ];
 
+// Root route - Add this to handle requests to the base URL
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Beauty AI Backend API',
+        status: 'running',
+        version: '1.0.0',
+        endpoints: {
+            health: '/api/health',
+            search: '/api/products/search',
+            chat: '/api/chat/claude',
+            trends: '/api/trends',
+            categories: '/api/products/categories'
+        },
+        documentation: 'This is the backend API for the Beauty AI mobile app'
+    });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ 
