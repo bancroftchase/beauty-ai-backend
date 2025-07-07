@@ -77,7 +77,7 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// 🆕 NEW: Claude Product Generation Endpoint
+// 🆕 NEW: Claude Product Generation Endpoint (FIXED MODEL)
 app.post('/api/products/generate', async (req, res) => {
     try {
         const { category = 'skincare', count = 50, query = '' } = req.body;
@@ -93,7 +93,7 @@ app.post('/api/products/generate', async (req, res) => {
         const searchContext = query ? `Focus on products related to: "${query}". ` : '';
         
         const response = await axios.post('https://api.anthropic.com/v1/messages', {
-            model: 'claude-3-sonnet-20240229',
+            model: 'claude-3-5-sonnet-20241022',  // ✅ UPDATED MODEL
             max_tokens: 4000,
             messages: [{
                 role: 'user',
@@ -217,7 +217,7 @@ app.get('/api/products/makeup-api', async (req, res) => {
     }
 });
 
-// Claude AI Chat Integration
+// Claude AI Chat Integration (FIXED MODEL)
 app.post('/api/chat/claude', async (req, res) => {
     try {
         const { message, context = 'beauty consultation' } = req.body;
@@ -231,7 +231,7 @@ app.post('/api/chat/claude', async (req, res) => {
         }
 
         const response = await axios.post('https://api.anthropic.com/v1/messages', {
-            model: 'claude-3-sonnet-20240229',
+            model: 'claude-3-5-sonnet-20241022',  // ✅ UPDATED MODEL
             max_tokens: 1500,
             messages: [{
                 role: 'user',
@@ -549,6 +549,7 @@ app.listen(PORT, () => {
     console.log(`🚀 Beauty AI API Server running on port ${PORT}`);
     console.log(`📱 Health Check: http://localhost:${PORT}/api/health`);
     console.log(`🤖 Claude AI: ${process.env.CLAUDE_API_KEY ? 'Configured ✅' : 'Not configured ❌'}`);
+    console.log(`🔑 API Key starts with: ${process.env.CLAUDE_API_KEY ? process.env.CLAUDE_API_KEY.substring(0, 15) + '...' : 'NONE'}`);
     console.log(`🛍️ Products Database: ${BEAUTY_PRODUCTS.length} products loaded`);
     console.log(`🆕 New Features: Claude Product Generation + Real Beauty API`);
 });
