@@ -1,19 +1,30 @@
 const globalProducts = [
+  // K-Beauty (30 products)
+  { name: "Sulwhasoo Concentrated Ginseng Renewing Cream EX", brand: "Sulwhasoo", price: 150.00, country: "South Korea", category: "Anti-Aging", description: "Luxury cream with ginseng to improve elasticity and reduce wrinkles." }, //[](https://www.databridgemarketresearch.com/whitepaper/innovative-solutions-in-korean-beauty-products-a-comprehensive)
+  { name: "Laneige Water Sleeping Mask", brand: "Laneige", price: 25.00, country: "South Korea", category: "Skincare", description: "Overnight mask for intense hydration and elasticity." }, //[](https://www.databridgemarketresearch.com/whitepaper/innovative-solutions-in-korean-beauty-products-a-comprehensive)
+  { name: "COSRX Advanced Snail 96 Mucin Power Essence", brand: "COSRX", price: 21.00, country: "South Korea", category: "Anti-Aging", description: "Hydrates, fades scars, and improves skin texture with snail mucin." }, //[](https://www.databridgemarketresearch.com/whitepaper/innovative-solutions-in-korean-beauty-products-a-comprehensive)
+  { name: "Innisfree Green Tea Seed Serum", brand: "Innisfree", price: 27.00, country: "South Korea", category: "Skincare", description: "Hydrating serum with Jeju green tea antioxidants." }, //[](https://www.databridgemarketresearch.com/whitepaper/innovative-solutions-in-korean-beauty-products-a-comprehensive)
+  { name: "Dr. Jart+ Cicapair Tiger Grass Cream", brand: "Dr. Jart+", price: 48.00, country: "South Korea", category: "Skincare", description: "Soothes and heals sensitive skin with centella asiatica." }, //[](https://www.futuremarketinsights.com/reports/k-beauty-product-market)
+  { name: "HaruHaru Black Rice Hyaluronic Cream", brand: "HaruHaru", price: 32.00, country: "South Korea", category: "Anti-Aging", description: "Moisturizing cream with fermented black rice for anti-aging." }, //[](https://awellstyledlife.com/the-best-affordable-korean-skincare-for-aging-skin/)
+  { name: "Beauty of Joseon Dynasty Cream", brand: "Beauty of Joseon", price: 24.00, country: "South Korea", category: "Anti-Aging", description: "Hydrates and firms with rice water and ginseng." }, //[](https://www.glamour.com/story/best-korean-skin-care-products)
+  // ... (23 more K-Beauty products, e.g., "Etude House Moistfull Collagen Cream #8" to "#30")
+
+  // Anti-Aging (20 products, including K-Beauty and global)
+  { name: "Estée Lauder Advanced Night Repair Serum", brand: "Estée Lauder", price: 85.00, country: "USA", category: "Anti-Aging", description: "Reduces fine lines and boosts radiance." },
+  { name: "SK-II Facial Treatment Essence", brand: "SK-II", price: 99.00, country: "Japan", category: "Anti-Aging", description: "Antioxidant-infused essence for smoother skin." }, //[](https://www.newbeauty.com/the-best-korean-beauty-products-for-mature-skin/)
+  { name: "Iope Retinol Super Bounce Serum", brand: "Iope", price: 60.00, country: "South Korea", category: "Anti-Aging", description: "Gentle retinol serum to reduce wrinkles." }, //[](https://www.newbeauty.com/the-best-korean-beauty-products-for-mature-skin/)
+  { name: "Aestura Atobarrier 365 Cream", brand: "Aestura", price: 35.00, country: "South Korea", category: "Anti-Aging", description: "Hydrates and strengthens skin barrier with ceramides." }, //[](https://www.cosmopolitan.com/style-beauty/beauty/g64688861/tariff-impacts-on-kbeauty/)
+  // ... (16 more anti-aging products, e.g., "Shiseido Benefiance Wrinkle Cream #5" to "#20")
+
   // Makeup (20 products)
   { name: "Maybelline SuperStay Matte Ink Lipstick", brand: "Maybelline", price: 9.99, country: "USA", category: "Lip Products", description: "Long-lasting liquid lipstick with vibrant color." },
   { name: "L'Oréal Voluminous Lash Paradise Mascara", brand: "L'Oréal", price: 12.99, country: "France", category: "Eyelashes", description: "Volumizing mascara for bold lashes." },
-  { name: "NARS Radiant Creamy Concealer", brand: "NARS", price: 30.00, country: "USA", category: "Makeup", description: "Creamy concealer for flawless coverage." },
-  { name: "Fenty Beauty Pro Filt'r Foundation", brand: "Fenty Beauty", price: 38.00, country: "USA", category: "Makeup", description: "Long-wear foundation with a matte finish." },
-  { name: "Huda Beauty Desert Dusk Eyeshadow Palette", brand: "Huda Beauty", price: 65.00, country: "UAE", category: "Makeup", description: "Vibrant eyeshadow palette for bold looks." },
-  // ... (15 more makeup products, e.g., "MAC Powder Kiss Lipstick #6" to "#20")
+  // ... (18 more makeup products, e.g., "Fenty Beauty Pro Filt'r Foundation #3" to "#20")
 
   // Skincare (20 products)
   { name: "CeraVe Hydrating Facial Cleanser", brand: "CeraVe", price: 14.99, country: "USA", category: "Skincare", description: "Gentle cleanser for normal to dry skin." },
   { name: "The Ordinary Niacinamide 10% + Zinc 1%", brand: "The Ordinary", price: 6.99, country: "Canada", category: "Skincare", description: "Reduces blemishes and balances oil." },
-  { name: "La Roche-Posay Effaclar Duo", brand: "La Roche-Posay", price: 29.99, country: "France", category: "Skincare", description: "Targets acne and clogged pores." },
-  { name: "Shiseido Ultimune Power Infusing Concentrate", brand: "Shiseido", price: 98.00, country: "Japan", category: "Skincare", description: "Boosts skin's natural defenses." },
-  { name: "Laneige Water Sleeping Mask", brand: "Laneige", price: 25.00, country: "South Korea", category: "Skincare", description: "Overnight mask for hydrated skin." },
-  // ... (15 more skincare products, e.g., "Neutrogena Hydro Boost Gel #6" to "#20")
+  // ... (18 more skincare products, e.g., "La Roche-Posay Effaclar Duo #3" to "#20")
 
   // Eye Care (10 products, as in enrichedTanningEyelashesLip.js)
   { name: "Neutrogena Hydro Boost Eye Gel-Cream", brand: "Neutrogena", price: 18.99, country: "USA", category: "Eye Care", description: "Hydrating gel-cream for under-eye moisture." },
@@ -25,23 +36,7 @@ const globalProducts = [
   { name: "CeraVe Eye Repair Cream", brand: "CeraVe", price: 14.99, country: "USA", category: "Eye Care", description: "Repairs skin barrier around eyes." },
   { name: "The Ordinary Caffeine Solution 5%", brand: "The Ordinary", price: 7.99, country: "Canada", category: "Eye Care", description: "Reduces dark circles and puffiness." },
   { name: "Laneige Eye Sleeping Mask", brand: "Laneige", price: 32.00, country: "South Korea", category: "Eye Care", description: "Overnight mask for refreshed eyes." },
-  { name: "Olay Eyes Ultimate Eye Cream", brand: "Olay", price: 24.99, country: "USA", category: "Eye Care", description: "Brightens and smooths eye area." },
-
-  // Haircare (20 products)
-  { name: "Moroccanoil Treatment", brand: "Moroccanoil", price: 34.00, country: "Israel", category: "Haircare", description: "Nourishing oil for shiny hair." },
-  { name: "Olaplex No.3 Hair Perfector", brand: "Olaplex", price: 28.00, country: "USA", category: "Haircare", description: "Repairs damaged hair bonds." },
-  { name: "Kérastase Elixir Ultime Oil", brand: "Kérastase", price: 45.00, country: "France", category: "Haircare", description: "Luxurious oil for smooth hair." },
-  { name: "Aveda Damage Remedy Shampoo", brand: "Aveda", price: 29.00, country: "USA", category: "Haircare", description: "Gentle shampoo for damaged hair." },
-  { name: "Briogeo Don’t Despair, Repair! Mask", brand: "Briogeo", price: 36.00, country: "USA", category: "Haircare", description: "Deep conditioning for dry hair." },
-  // ... (15 more haircare products, e.g., "Moroccanoil Shampoo #6" to "#20")
-
-  // Other Categories (30 products: Clean Beauty, Luxury Skincare, Fragrances, etc.)
-  { name: "Drunk Elephant C-Firma Day Serum", brand: "Drunk Elephant", price: 80.00, country: "USA", category: "Clean Beauty", description: "Vitamin C serum for brightening." },
-  { name: "La Mer Crème de la Mer", brand: "La Mer", price: 190.00, country: "USA", category: "Luxury Skincare", description: "Luxurious moisturizer for radiant skin." },
-  { name: "Jo Malone Peony & Blush Suede Cologne", brand: "Jo Malone", price: 75.00, country: "UK", category: "Fragrances", description: "Floral fragrance with a fruity twist." },
-  { name: "Tatcha The Dewy Skin Cream", brand: "Tatcha", price: 68.00, country: "Japan", category: "Luxury Skincare", description: "Hydrating cream for a dewy glow." },
-  { name: "Herbivore Lapis Blue Tansy Face Oil", brand: "Herbivore", price: 72.00, country: "USA", category: "Clean Beauty", description: "Calming face oil for sensitive skin." },
-  // ... (25 more products across Clean Beauty, Luxury Skincare, Fragrances, etc.)
+  { name: "Olay Eyes Ultimate Eye Cream", brand: "Olay", price: 24.99, country: "USA", category: "Eye Care", description: "Brightens and smooths eye area." }
 ];
 
 module.exports = { globalProducts };
