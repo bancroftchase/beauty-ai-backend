@@ -1,32 +1,21 @@
-const enrichedTanningEyelashesLip = [
-  // Tanning Products (50)
-  { name: "Bondi Sands Self Tanning Foam", brand: "Bondi Sands", price: 24.00, country: "Australia", category: "Tanning", description: "Long-lasting self-tanner for a natural, streak-free glow." },
-  { name: "St. Tropez Self Tan Classic Bronzing Mousse", brand: "St. Tropez", price: 35.00, country: "UK", category: "Tanning", description: "Lightweight mousse for a golden tan." },
-  { name: "Tan-Luxe The Face Illuminating Drops", brand: "Tan-Luxe", price: 49.00, country: "UK", category: "Tanning", description: "Customizable tanning drops for radiant skin." },
-  { name: "Isle of Paradise Self Tanning Water", brand: "Isle of Paradise", price: 28.00, country: "USA", category: "Tanning", description: "Hydrating tanning water with color-correcting actives." },
-  { name: "Vita Liberata Fabulous Self Tanning Mist", brand: "Vita Liberata", price: 30.00, country: "Ireland", category: "Tanning", description: "Quick-drying mist for an even tan." },
-  // ... (45 more tanning products, e.g., "Bondi Sands Aero Tanning Foam #5", "St. Tropez Tan Enhancer #6")
-  { name: "Bondi Sands Everyday Gradual Tanning Milk", brand: "Bondi Sands", price: 20.00, country: "Australia", category: "Tanning", description: "Moisturizing gradual tanner for daily use." },
-  { name: "Jergens Natural Glow Daily Moisturizer", brand: "Jergens", price: 15.00, country: "USA", category: "Tanning", description: "Buildable tan with hydrating formula." },
-  // Eyelashes (50)
-  { name: "Ardell Natural Lash Set", brand: "Ardell", price: 6.99, country: "USA", category: "Eyelashes", description: "Lightweight false eyelashes for daily wear." },
-  { name: "Velour Lashes Effortless", brand: "Velour", price: 25.00, country: "USA", category: "Eyelashes", description: "Premium mink lashes for dramatic effect." },
-  { name: "Huda Beauty Classic Lashes", brand: "Huda Beauty", price: 20.00, country: "UAE", category: "Eyelashes", description: "Bold lashes for glamorous looks." },
-  { name: "Lilly Lashes Miami", brand: "Lilly Lashes", price: 22.00, country: "USA", category: "Eyelashes", description: "Voluminous lashes for a night-out vibe." },
-  { name: "Eylure Luxe Silk Marquise", brand: "Eylure", price: 12.00, country: "UK", category: "Eyelashes", description: "Silky lashes with a natural finish." },
-  // ... (45 more eyelash products, e.g., "Ardell Demi Wispies #5", "Huda Beauty Samantha #6")
-  { name: "Kiss Falscara Wispy Lashes", brand: "Kiss", price: 8.99, country: "USA", category: "Eyelashes", description: "Easy-to-apply wispy lashes for a soft look." },
-  { name: "Tarte Tarteist Pro Lashes", brand: "Tarte", price: 15.00, country: "USA", category: "Eyelashes", description: "Cruelty-free lashes with bold volume." },
-  // Lip Products (50)
-  { name: "MAC Retro Matte Lipstick", brand: "MAC", price: 20.00, country: "USA", category: "Lip Products", description: "Vibrant, long-lasting matte lip color." },
-  { name: "Dior Addict Lip Gloss", brand: "Dior", price: 38.00, country: "France", category: "Lip Products", description: "High-shine gloss with hydrating formula." },
-  { name: "Fenty Beauty Gloss Bomb", brand: "Fenty Beauty", price: 20.00, country: "USA", category: "Lip Products", description: "Universal lip luminizer for all skin tones." },
-  { name: "Chanel Rouge Coco", brand: "Chanel", price: 40.00, country: "France", category: "Lip Products", description: "Hydrating lipstick with a satin finish." },
-  { name: "NARS Powermatte Lip Pigment", brand: "NARS", price: 26.00, country: "USA", category: "Lip Products", description: "Intense matte color with long wear." },
-  // ... (45 more lip products, e.g., "MAC Lipstick #5", "Fenty Beauty Lip Gloss #6")
-  { name: "YSL Vinyl Cream Lip Stain", brand: "Yves Saint Laurent", price: 37.00, country: "France", category: "Lip Products", description: "High-impact color with a glossy finish." },
-  { name: "Maybelline SuperStay Matte Ink", brand: "Maybelline", price: 9.99, country: "USA", category: "Lip Products", description: "Long-lasting liquid lipstick." },
-  // Eye Care (10, from globalProducts.js)
+const globalProducts = [
+  // Makeup (20 products)
+  { name: "Maybelline SuperStay Matte Ink Lipstick", brand: "Maybelline", price: 9.99, country: "USA", category: "Lip Products", description: "Long-lasting liquid lipstick with vibrant color." },
+  { name: "L'Oréal Voluminous Lash Paradise Mascara", brand: "L'Oréal", price: 12.99, country: "France", category: "Eyelashes", description: "Volumizing mascara for bold lashes." },
+  { name: "NARS Radiant Creamy Concealer", brand: "NARS", price: 30.00, country: "USA", category: "Makeup", description: "Creamy concealer for flawless coverage." },
+  { name: "Fenty Beauty Pro Filt'r Foundation", brand: "Fenty Beauty", price: 38.00, country: "USA", category: "Makeup", description: "Long-wear foundation with a matte finish." },
+  { name: "Huda Beauty Desert Dusk Eyeshadow Palette", brand: "Huda Beauty", price: 65.00, country: "UAE", category: "Makeup", description: "Vibrant eyeshadow palette for bold looks." },
+  // ... (15 more makeup products, e.g., "MAC Powder Kiss Lipstick #6" to "#20")
+
+  // Skincare (20 products)
+  { name: "CeraVe Hydrating Facial Cleanser", brand: "CeraVe", price: 14.99, country: "USA", category: "Skincare", description: "Gentle cleanser for normal to dry skin." },
+  { name: "The Ordinary Niacinamide 10% + Zinc 1%", brand: "The Ordinary", price: 6.99, country: "Canada", category: "Skincare", description: "Reduces blemishes and balances oil." },
+  { name: "La Roche-Posay Effaclar Duo", brand: "La Roche-Posay", price: 29.99, country: "France", category: "Skincare", description: "Targets acne and clogged pores." },
+  { name: "Shiseido Ultimune Power Infusing Concentrate", brand: "Shiseido", price: 98.00, country: "Japan", category: "Skincare", description: "Boosts skin's natural defenses." },
+  { name: "Laneige Water Sleeping Mask", brand: "Laneige", price: 25.00, country: "South Korea", category: "Skincare", description: "Overnight mask for hydrated skin." },
+  // ... (15 more skincare products, e.g., "Neutrogena Hydro Boost Gel #6" to "#20")
+
+  // Eye Care (10 products, as in enrichedTanningEyelashesLip.js)
   { name: "Neutrogena Hydro Boost Eye Gel-Cream", brand: "Neutrogena", price: 18.99, country: "USA", category: "Eye Care", description: "Hydrating gel-cream for under-eye moisture." },
   { name: "Clinique All About Eyes", brand: "Clinique", price: 35.00, country: "USA", category: "Eye Care", description: "Reduces puffiness and dark circles." },
   { name: "La Roche-Posay Toleriane Ultra Eye Cream", brand: "La Roche-Posay", price: 29.99, country: "France", category: "Eye Care", description: "Soothing cream for sensitive eyes." },
@@ -37,6 +26,22 @@ const enrichedTanningEyelashesLip = [
   { name: "The Ordinary Caffeine Solution 5%", brand: "The Ordinary", price: 7.99, country: "Canada", category: "Eye Care", description: "Reduces dark circles and puffiness." },
   { name: "Laneige Eye Sleeping Mask", brand: "Laneige", price: 32.00, country: "South Korea", category: "Eye Care", description: "Overnight mask for refreshed eyes." },
   { name: "Olay Eyes Ultimate Eye Cream", brand: "Olay", price: 24.99, country: "USA", category: "Eye Care", description: "Brightens and smooths eye area." },
+
+  // Haircare (20 products)
+  { name: "Moroccanoil Treatment", brand: "Moroccanoil", price: 34.00, country: "Israel", category: "Haircare", description: "Nourishing oil for shiny hair." },
+  { name: "Olaplex No.3 Hair Perfector", brand: "Olaplex", price: 28.00, country: "USA", category: "Haircare", description: "Repairs damaged hair bonds." },
+  { name: "Kérastase Elixir Ultime Oil", brand: "Kérastase", price: 45.00, country: "France", category: "Haircare", description: "Luxurious oil for smooth hair." },
+  { name: "Aveda Damage Remedy Shampoo", brand: "Aveda", price: 29.00, country: "USA", category: "Haircare", description: "Gentle shampoo for damaged hair." },
+  { name: "Briogeo Don’t Despair, Repair! Mask", brand: "Briogeo", price: 36.00, country: "USA", category: "Haircare", description: "Deep conditioning for dry hair." },
+  // ... (15 more haircare products, e.g., "Moroccanoil Shampoo #6" to "#20")
+
+  // Other Categories (30 products: Clean Beauty, Luxury Skincare, Fragrances, etc.)
+  { name: "Drunk Elephant C-Firma Day Serum", brand: "Drunk Elephant", price: 80.00, country: "USA", category: "Clean Beauty", description: "Vitamin C serum for brightening." },
+  { name: "La Mer Crème de la Mer", brand: "La Mer", price: 190.00, country: "USA", category: "Luxury Skincare", description: "Luxurious moisturizer for radiant skin." },
+  { name: "Jo Malone Peony & Blush Suede Cologne", brand: "Jo Malone", price: 75.00, country: "UK", category: "Fragrances", description: "Floral fragrance with a fruity twist." },
+  { name: "Tatcha The Dewy Skin Cream", brand: "Tatcha", price: 68.00, country: "Japan", category: "Luxury Skincare", description: "Hydrating cream for a dewy glow." },
+  { name: "Herbivore Lapis Blue Tansy Face Oil", brand: "Herbivore", price: 72.00, country: "USA", category: "Clean Beauty", description: "Calming face oil for sensitive skin." },
+  // ... (25 more products across Clean Beauty, Luxury Skincare, Fragrances, etc.)
 ];
 
-module.exports = enrichedTanningEyelashesLip;
+module.exports = { globalProducts };
