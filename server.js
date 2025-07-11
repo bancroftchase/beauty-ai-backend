@@ -4,9 +4,9 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Import global products and enriched tanning/eyelashes/lip products
-const { globalProducts } = require('./globalProducts');
-const enrichedTanningEyelashesLip = require('./enrichedTanningEyelashesLip'); // Assume this file exists
+// Import product datasets
+const { globalProducts } = require('./data/globalProducts');
+const enrichedTanningEyelashesLip = require('./data/enrichedTanningEyelashesLip');
 
 app.use(cors());
 app.use(express.json());
@@ -17,7 +17,7 @@ const BEAUTY_PRODUCTS = [
   ...enrichedTanningEyelashesLip,
 ];
 
-// Recalled products (eye care only for now)
+// Recalled products
 const RECALLED_PRODUCTS = [
   { name: 'Artificial Tears Ophthalmic Solution', ndc: '50268-043-15' },
   { name: 'Carboxymethylcellulose Sodium Ophthalmic Gel 1%', ndc: '50268-066-15' },
@@ -28,7 +28,7 @@ app.get('/api/products/search', async (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase() : '';
   let products = [];
 
-  // Step 1: Try external API (Rainforest API for Amazon)
+  // Step 1: Try Rainforest API (Amazon)
   try {
     const response = await axios.get('https://api.rainforestapi.com/request', {
       params: {
@@ -53,10 +53,30 @@ app.get('/api/products/search', async (req, res) => {
       }))
       .filter(product => !RECALLED_PRODUCTS.some(recalled => recalled.name === product.name || product.name.includes('Artificial Tears')));
   } catch (error) {
-    console.error('External API error:', error.message);
+    console.error('Rainforest API error:', error.message);
   }
 
-  // Step 2: Fallback to local database if no results or API fails
+  // Step 2: Fallback to Makeup API if no results
+  if (products.length === 0 && (query.includes('lip') || query.includes('eyelash'))) {
+    try {
+      const makeupType = query.includes('lip') ? 'lipstick' : 'eyelash';
+      const response = await axios.get(`http://makeup-api.herokuapp.com/api/v1/products.json?product_type=${makeupType}`);
+      products = response.data
+        .map(item => ({
+          name: item.name,
+          brand: item.brand || 'Unknown',
+          price: item.price ? parseFloat(item.price) : 0,
+          category: query.includes('lip') ? 'Lip Products' : 'Eyelashes',
+          description: item.description || 'No description available',
+          country: 'Unknown',
+        }))
+        .filter(product => !RECALLED_PRODUCTS.some(recalled => recalled.name === product.name));
+    } catch (error) {
+      console.error('Makeup API error:', error.message);
+    }
+  }
+
+  // Step 3: Fallback to local database if no results
   if (products.length === 0) {
     products = BEAUTY_PRODUCTS.filter(product =>
       (product.category.toLowerCase().includes(query) ||
@@ -68,7 +88,7 @@ app.get('/api/products/search', async (req, res) => {
     );
   }
 
-  // Step 3: Calculate stats for display
+  // Step 4: Calculate stats
   const brands = [...new Set(products.map(p => p.brand))];
   const countries = [...new Set(products.map(p => p.country).filter(c => c !== 'Unknown'))];
 
