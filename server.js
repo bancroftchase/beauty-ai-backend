@@ -1,95 +1,99 @@
 const express = require('express');
-const axios = require('axios');
-const helmet = require('helmet');
-const dotenv = require('dotenv');
 const cors = require('cors');
-
-dotenv.config();
-
+const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.static('public'));
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'https://api.anthropic.com', 'https://beauty-static-live.onrender.com'],
-        fontSrc: ["'self'", 'https:'],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-    },
-  })
-);
-app.use(cors({
-  origin: 'https://beauty-static-live.onrender.com',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
-}));
+// Import global products and enriched tanning/eyelashes/lip products
+const { globalProducts } = require('./globalProducts');
+const enrichedTanningEyelashesLip = require('./enrichedTanningEyelashesLip'); // Assume this file exists
 
+app.use(cors());
+app.use(express.json());
+
+// Merge product datasets
 const BEAUTY_PRODUCTS = [
-  { name: 'Vitamin C Serum', brand: 'The Ordinary', price: 6.70, category: 'Serum' },
-  { name: 'Hyaluronic Acid', brand: 'The Ordinary', price: 6.80, category: 'Serum' },
-  { name: 'Moisturizing Cream', brand: 'CeraVe', price: 15.99, category: 'Moisturizer' },
-  { name: 'Snail Mucin Essence', brand: 'COSRX', price: 17.00, category: 'Essence' },
-  { name: 'Retinol Serum', brand: 'Paula’s Choice', price: 42.00, category: 'Serum' },
+  ...globalProducts,
+  ...enrichedTanningEyelashesLip,
 ];
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Beauty AI Backend is running' });
-});
+// Recalled products (eye care only for now)
+const RECALLED_PRODUCTS = [
+  { name: 'Artificial Tears Ophthalmic Solution', ndc: '50268-043-15' },
+  { name: 'Carboxymethylcellulose Sodium Ophthalmic Gel 1%', ndc: '50268-066-15' },
+  { name: 'Carboxymethylcellulose Sodium Ophthalmic Solution', ndc: '50268-068-15' },
+];
 
-app.get('/api/products/search', (req, res) => {
+app.get('/api/products/search', async (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase() : '';
-  const filteredProducts = BEAUTY_PRODUCTS.filter(
-    (product) =>
-      product.name.toLowerCase().includes(query) ||
-      product.brand.toLowerCase().includes(query) ||
-      product.category.toLowerCase().includes(query)
-  );
-  res.json({ success: true, products: filteredProducts });
-});
+  let products = [];
 
-app.post('/api/chat/claude', async (req, res) => {
-  const { message, context } = req.body;
-
-  if (!process.env.CLAUDE_API_KEY) {
-    return res.status(500).json({ success: false, error: 'Claude API key not configured' });
-  }
-
+  // Step 1: Try external API (Rainforest API for Amazon)
   try {
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: 'claude-3-opus-20240229',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: `You are a beauty expert. Provide a detailed response to the following user query in the context of ${context || 'beauty consultation'}: ${message}` }],
+    const response = await axios.get('https://api.rainforestapi.com/request', {
+      params: {
+        api_key: process.env.RAINFOREST_API_KEY,
+        type: 'search',
+        amazon_domain: 'amazon.com',
+        search_term: query + ' beauty products',
       },
-      {
-        headers: {
-          'x-api-key': process.env.CLAUDE_API_KEY,
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-        },
-      }
-    );
-
-    const reply = response.data.content[0].text;
-    res.json({ success: true, response: reply });
+    });
+    const apiProducts = response.data.search_results || [];
+    products = apiProducts
+      .map(item => ({
+        name: item.title,
+        brand: item.brand || 'Unknown',
+        price: item.price ? parseFloat(item.price.value) : 0,
+        category: query.includes('eye') ? 'Eye Care' :
+                 query.includes('tanning') ? 'Tanning' :
+                 query.includes('eyelash') ? 'Eyelashes' :
+                 query.includes('lip') ? 'Lip Products' : 'Other',
+        description: item.description || 'No description available',
+        country: 'Unknown',
+      }))
+      .filter(product => !RECALLED_PRODUCTS.some(recalled => recalled.name === product.name || product.name.includes('Artificial Tears')));
   } catch (error) {
-    console.error('Error communicating with Claude API:', error.message);
-    res.status(500).json({ success: false, error: 'Failed to process the request' });
+    console.error('External API error:', error.message);
+  }
+
+  // Step 2: Fallback to local database if no results or API fails
+  if (products.length === 0) {
+    products = BEAUTY_PRODUCTS.filter(product =>
+      (product.category.toLowerCase().includes(query) ||
+       product.name.toLowerCase().includes(query) ||
+       product.brand.toLowerCase().includes(query) ||
+       product.description.toLowerCase().includes(query) ||
+       product.country.toLowerCase().includes(query)) &&
+      !RECALLED_PRODUCTS.some(recalled => recalled.name === product.name)
+    );
+  }
+
+  // Step 3: Calculate stats for display
+  const brands = [...new Set(products.map(p => p.brand))];
+  const countries = [...new Set(products.map(p => p.country).filter(c => c !== 'Unknown'))];
+
+  res.json({
+    products,
+    stats: {
+      productCount: products.length,
+      brandCount: brands.length,
+      countryCount: countries.length,
+    },
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (email === 'demo@beauty.com' && password === 'demo123') {
+    res.json({ token: 'demo-token' });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
   }
 });
 
-app.get('*', (req, res) => {
-  res.sendFile('index.html', { root: 'public' });
+app.post('/api/auth/signup', (req, res) => {
+  const { name, email, password } = req.body;
+  res.json({ token: 'new-user-token' });
 });
 
 app.listen(port, () => {
