@@ -126,7 +126,7 @@ app.get('/api/products/search', (req, res) => {
       success: true,
       products: products.slice(0, 100).map(product => ({
         ...product,
-        price: product.price.toString() // Ensure price is string for frontend
+        price: product.price.toString() // Ensure string for frontend
       })),
       stats: {
         productCount: products.length,
@@ -181,7 +181,7 @@ app.post('/api/chat/claude', (req, res) => {
   }
 });
 
-// Error handling
+// Error handling (line ~181)
 app.use((err, req, res, next) => {
   console.error('Server error:', err.message);
   res.status(500).json({ success: false, error: 'Internal Server Error' });
