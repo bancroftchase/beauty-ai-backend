@@ -105,7 +105,7 @@ app.get('/health', (req, res) => {
 // Search endpoint
 app.get('/api/products/search', (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase() : '';
-  console.log(`Search query: ${query}`);
+  console.log(`Search query: ${query}, requestID: ${req.headers['x-request-id'] || 'unknown'}`);
   try {
     const products = BEAUTY_PRODUCTS.filter(product =>
       product && (
@@ -134,7 +134,7 @@ app.get('/api/products/search', (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Search error:', error.message);
+    console.error(`Search error for query ${query}: ${error.message}, stack: ${error.stack}`);
     res.status(500).json({
       success: false,
       error: 'Failed to process search',
@@ -144,14 +144,21 @@ app.get('/api/products/search', (req, res) => {
   }
 });
 
-// Chat endpoint
-app.post('/api/chat/claude', (req, res) => {
+// Chat endpoint with timeout handling
+app.post('/api/chat/claude', async (req, res) => {
   const { message, context } = req.body || {};
-  console.log(`Chat query: ${message}, Context: ${context}`);
+  const requestId = req.headers['x-request-id'] || 'unknown';
+  console.log(`Chat query: ${message}, Context: ${context}, requestID: ${requestId}`);
   if (!message || !context) {
     return res.status(400).json({ success: false, error: 'Missing message or context' });
   }
   try {
+    // Set a timeout to prevent long-running requests
+    const timeout = setTimeout(() => {
+      console.error(`Chat request timeout for query: ${message}, requestID: ${requestId}`);
+      res.status(503).json({ success: false, error: 'Request timeout' });
+    }, 10000); // 10-second timeout
+
     const query = message.toLowerCase();
     const products = BEAUTY_PRODUCTS
       .filter(product =>
@@ -165,21 +172,23 @@ app.post('/api/chat/claude', (req, res) => {
         )
       )
       .slice(0, 3);
-    console.log(`Chat returned ${products.length} products for query: ${query}`);
+    console.log(`Chat returned ${products.length} products for query: ${query}, requestID: ${requestId}`);
     const responseText = products.length > 0 ?
       `Here are some ${context} products matching "${message}":\n` +
       products.map(p => `- ${p.name} by ${p.brand} ($${p.price.toString()}): ${p.description}`).join('\n') :
       `No products found for "${message}". Try a topic like K-Beauty or ask for specific products.`;
+    clearTimeout(timeout);
     res.json({ success: true, response: responseText });
   } catch (error) {
-    console.error('Chat error:', error.message);
+    clearTimeout(timeout);
+    console.error(`Chat error for query ${message}: ${error.message}, stack: ${error.stack}, requestID: ${requestId}`);
     res.status(500).json({ success: false, error: 'Failed to process chat request' });
   }
 });
 
 // Error handling
 app.use((err, req, res, next) => {
-  console.error('Server error:', err.message);
+  console.error(`Server error: ${err.message}, stack: ${err.stack}, requestID: ${req.headers['x-request-id'] || 'unknown'}`);
   res.status(500).json({ success: false, error: 'Internal Server Error' });
 });
 
