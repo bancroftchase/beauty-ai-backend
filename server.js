@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -85,8 +86,10 @@ const QUERY_ALIASES = {
   'kbeauty': ['k-beauty'],
   'eyecare': ['eye care'],
   'lipproducts': ['lip products'],
-  'haircare': [], // No haircare products, will return empty
-  'tools': [] // No tools products, will return empty
+  'haircare': [],
+  'tools': [],
+  'natural': ['global', 'k-beauty'], // Map to global and k-beauty for natural products
+  'organic': ['global', 'k-beauty'] // Map to global and k-beauty for organic products
 };
 
 app.use(cors({
@@ -116,34 +119,73 @@ app.get('/health', (req, res) => {
 });
 
 // Search endpoint
-app.get('/api/products/search', (req, res) => {
+app.get('/api/products/search', async (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase().replace(/[^a-z0-9-]/g, '') : '';
   const requestId = req.headers['x-request-id'] || 'unknown';
   console.log(`Search query: ${query}, requestID: ${requestId}`);
   try {
-    let categoriesToMatch = [query];
-    if (QUERY_ALIASES[query]) {
-      categoriesToMatch = QUERY_ALIASES[query];
-      console.log(`Mapped query ${query} to categories: ${categoriesToMatch.join(', ')}`);
+    let products = [];
+    let source = 'local';
+
+    // Step 1: Try Rainforest API
+    if (process.env.RAINFOREST_API_KEY && query) {
+      try {
+        const response = await axios.get('https://api.rainforestapi.com/request', {
+          params: {
+            api_key: process.env.RAINFOREST_API_KEY,
+            type: 'search',
+            amazon_domain: 'amazon.com',
+            search_term: query,
+            category_id: 'beauty'
+          },
+          timeout: 5000 // 5-second timeout
+        });
+        if (response.data && response.data.search_results) {
+          products = response.data.search_results.map(item => ({
+            name: item.title || 'Unknown Product',
+            category: 'beauty',
+            brand: item.brand || 'Unknown Brand',
+            price: parseFloat(item.price?.value || 0).toFixed(2),
+            description: item.description || 'No description available',
+            country: 'USA',
+            id: item.asin || `rainforest-${Math.random().toString(36).substr(2, 9)}`
+          }));
+          source = 'rainforest';
+          console.log(`Rainforest API returned ${products.length} products for query: ${query}`);
+        }
+      } catch (error) {
+        console.error(`Rainforest API error: ${error.message}, requestID: ${requestId}`);
+      }
     }
-    const products = BEAUTY_PRODUCTS.filter(product =>
-      product && (
-        query === '' || query === 'global' || // Return all products for empty or 'global'
-        categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
-        product.category?.toLowerCase().includes(query) ||
-        product.name?.toLowerCase().includes(query) ||
-        product.brand?.toLowerCase().includes(query) ||
-        product.description?.toLowerCase().includes(query) ||
-        product.country?.toLowerCase().includes(query)
-      )
-    );
+
+    // Step 2: Fall back to local dataset if no results
+    if (products.length === 0) {
+      let categoriesToMatch = [query];
+      if (QUERY_ALIASES[query]) {
+        categoriesToMatch = QUERY_ALIASES[query];
+        console.log(`Mapped query ${query} to categories: ${categoriesToMatch.join(', ')}`);
+      }
+      products = BEAUTY_PRODUCTS.filter(product =>
+        product && (
+          query === '' || query === 'global' ||
+          categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
+          product.category?.toLowerCase().includes(query) ||
+          product.name?.toLowerCase().includes(query) ||
+          product.brand?.toLowerCase().includes(query) ||
+          product.description?.toLowerCase().includes(query) ||
+          product.country?.toLowerCase().includes(query)
+        )
+      );
+      console.log(`Local dataset returned ${products.length} products for query: ${query}`);
+    }
+
     const brands = [...new Set(products.map(p => p.brand).filter(Boolean))];
     const countries = [...new Set(products.map(p => p.country).filter(Boolean))];
-    console.log(`Returning ${products.length} products for query: ${query}`);
+    console.log(`Returning ${products.length} products for query: ${query}, source: ${source}`);
     console.log(`Filtered categories: ${[...new Set(products.map(p => p.category))].join(', ')}`);
     res.json({
       success: true,
-      products: products.slice(0, 100).map(product => ({
+      products: products.slice(0, 200).map(product => ({
         ...product,
         price: product.price.toString()
       })),
@@ -151,7 +193,8 @@ app.get('/api/products/search', (req, res) => {
         productCount: products.length,
         brandCount: brands.length,
         countryCount: countries.length,
-      },
+        source
+      }
     });
   } catch (error) {
     console.error(`Search error for query ${query}: ${error.message}, stack: ${error.stack}, requestID: ${requestId}`);
@@ -159,12 +202,12 @@ app.get('/api/products/search', (req, res) => {
       success: false,
       error: 'Failed to process search',
       products: [],
-      stats: { productCount: 0, brandCount: 0, countryCount: 0 },
+      stats: { productCount: 0, brandCount: 0, countryCount: 0, source: 'none' }
     });
   }
 });
 
-// Chat endpoint with timeout handling
+// Chat endpoint with Claude and Rainforest API integration
 app.post('/api/chat/claude', async (req, res) => {
   const { message, context } = req.body || {};
   const requestId = req.headers['x-request-id'] || 'unknown';
@@ -173,42 +216,124 @@ app.post('/api/chat/claude', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Missing message or context' });
   }
   try {
-    // Set a timeout to prevent long-running requests
     const timeout = setTimeout(() => {
       console.error(`Chat request timeout for query: ${message}, requestID: ${requestId}`);
       res.status(503).json({ success: false, error: 'Request timeout' });
-    }, 10000); // 10-second timeout
+    }, 10000);
 
-    const query = message.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    let categoriesToMatch = [query];
-    if (QUERY_ALIASES[query]) {
-      categoriesToMatch = QUERY_ALIASES[query];
-      console.log(`Mapped chat query ${query} to categories: ${categoriesToMatch.join(', ')}`);
+    // Split query into terms
+    const queryTerms = message.toLowerCase().replace(/[^a-z0-9-]/g, ' ').split(' ').filter(term => term);
+    let products = [];
+    let source = 'local';
+    let searchQuery = message;
+
+    // Step 1: Use Claude API to process query
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const claudeResponse = await axios.post('https://api.anthropic.com/v1/messages', {
+          model: 'claude-3-opus-20240229',
+          max_tokens: 100,
+          messages: [{
+            role: 'user',
+            content: `Classify the query "${message}" into beauty product categories or keywords for searching Amazon beauty products. Return a comma-separated list of categories or keywords.`
+          }]
+        }, {
+          headers: {
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'Content-Type': 'application/json',
+            'anthropic-version': '2023-06-01'
+          },
+          timeout: 5000
+        });
+        const claudeOutput = claudeResponse.data.content[0].text;
+        searchQuery = claudeOutput.split(',').map(s => s.trim().toLowerCase()).join(' ');
+        console.log(`Claude mapped query "${message}" to: ${searchQuery}`);
+      } catch>Class error) {
+        console.error(`Claude API error: ${error.message}, requestID: ${requestId}`);
+      }
     }
-    const products = BEAUTY_PRODUCTS
-      .filter(product =>
-        product && (
-          query === '' || query === 'global' || // Return all products for 'global'
-          categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
-          product.category?.toLowerCase().includes(query) ||
-          product.name?.toLowerCase().includes(query) ||
-          product.brand?.toLowerCase().includes(query) ||
-          product.description?.toLowerCase().includes(query) ||
-          product.country?.toLowerCase().includes(query)
-        )
-      )
-      .slice(0, 3);
-    console.log(`Chat returned ${products.length} products for query: ${query}, requestID: ${requestId}`);
+
+    // Step 2: Try Rainforest API with Claude-processed query
+    if (process.env.RAINFOREST_API_KEY && searchQuery) {
+      try {
+        const response = await axios.get('https://api.rainforestapi.com/request', {
+          params: {
+            api_key: process.env.RAINFOREST_API_KEY,
+            type: 'search',
+            amazon_domain: 'amazon.com',
+            search_term: searchQuery,
+            category_id: 'beauty'
+          },
+          timeout: 5000
+        });
+        if (response.data && response.data.search_results) {
+          products = response.data.search_results.map(item => ({
+            name: item.title || 'Unknown Product',
+            category: 'beauty',
+            brand: item.brand || 'Unknown Brand',
+            price: parseFloat(item.price?.value || 0).toFixed(2),
+            description: item.description || 'No description available',
+            country: 'USA',
+            id: item.asin || `rainforest-${Math.random().toString(36).substr(2, 9)}`
+          }));
+          source = 'rainforest';
+          console.log(`Rainforest API returned ${products.length} products for query: ${searchQuery}`);
+        }
+      } catch (error) {
+        console.error(`Rainforest API error: ${error.message}, requestID: ${requestId}`);
+      }
+    }
+
+    // Step 3: Fall back to local dataset if no results
+    if (products.length === 0) {
+      let categoriesToMatch = [];
+      queryTerms.forEach(term => {
+        if (QUERY_ALIASES[term]) {
+          categoriesToMatch.push(...QUERY_ALIASES[term]);
+        } else {
+          categoriesToMatch.push(term);
+        }
+      });
+      categoriesToMatch = [...new Set(categoriesToMatch)];
+      products = BEAUTY_PRODUCTS
+        .filter(product =>
+          product && (
+            queryTerms.includes('global') ||
+            categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
+            queryTerms.some(term =>
+              product.category?.toLowerCase().includes(term) ||
+              product.name?.toLowerCase().includes(term) ||
+              product.brand?.toLowerCase().includes(term) ||
+              product.description?.toLowerCase().includes(term) ||
+              product.country?.toLowerCase().includes(term)
+            )
+          )
+        );
+      console.log(`Local dataset returned ${products.length} products for query: ${message}`);
+    }
+
+    // Format response
     const responseText = products.length > 0 ?
       `Here are some ${context} products matching "${message}":\n` +
-      products.map(p => `- ${p.name} by ${p.brand} ($${p.price.toString()}): ${p.description}`).join('\n') :
-      `No products found for "${message}". Try a topic like K-Beauty or ask for specific products.`;
+      products.slice(0, 50).map(p => `- ${p.name} by ${p.brand} ($${p.price}): ${p.description}`).join('\n') :
+      `No products found for "${message}". Try searching for categories like K-Beauty, Anti-Aging, or Global products.`;
     clearTimeout(timeout);
-    res.json({ success: true, response: responseText });
+    res.json({
+      success: true,
+      response: responseText,
+      products: products.slice(0, 200).map(product => ({
+        ...product,
+        price: product.price.toString()
+      })),
+      stats: {
+        productCount: products.length,
+        source
+      }
+    });
   } catch (error) {
     clearTimeout(timeout);
     console.error(`Chat error for query ${message}: ${error.message}, stack: ${error.stack}, requestID: ${requestId}`);
-    res.status(500).json({ success: false, error: 'Failed to process chat request' });
+    res.status(500).json({ success: false, error: 'Failed to process chat request', products: [], stats: { productCount: 0, source: 'none' } });
   }
 });
 
