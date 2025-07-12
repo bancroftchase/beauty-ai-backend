@@ -5,7 +5,6 @@ const port = process.env.PORT || 3000;
 
 // Dataset with ~3100 products, price as numbers
 const BEAUTY_PRODUCTS = [
-  // Anti-Aging (600 products)
   ...Array.from({ length: 600 }, (_, i) => ({
     name: `Anti Aging Serum ${i + 1}`,
     category: "anti-aging",
@@ -15,7 +14,6 @@ const BEAUTY_PRODUCTS = [
     country: ["USA", "France", "Japan", "South Korea"][Math.floor(Math.random() * 4)],
     id: `antiaging-${i + 1}`
   })),
-  // K-Beauty (600 products)
   ...Array.from({ length: 600 }, (_, i) => ({
     name: `K Beauty Essence ${i + 1}`,
     category: "k-beauty",
@@ -25,7 +23,6 @@ const BEAUTY_PRODUCTS = [
     country: "South Korea",
     id: `kbeauty-${i + 1}`
   })),
-  // Eye Care (500 products)
   ...Array.from({ length: 500 }, (_, i) => ({
     name: `Eye Cream ${i + 1}`,
     category: "eye care",
@@ -35,7 +32,6 @@ const BEAUTY_PRODUCTS = [
     country: ["USA", "UK", "Germany"][Math.floor(Math.random() * 3)],
     id: `eyecare-${i + 1}`
   })),
-  // Tanning (400 products)
   ...Array.from({ length: 400 }, (_, i) => ({
     name: `Tanning Lotion ${i + 1}`,
     category: "tanning",
@@ -45,7 +41,6 @@ const BEAUTY_PRODUCTS = [
     country: ["Australia", "USA"][Math.floor(Math.random() * 2)],
     id: `tanning-${i + 1}`
   })),
-  // Eyelashes (400 products)
   ...Array.from({ length: 400 }, (_, i) => ({
     name: `Eyelash Serum ${i + 1}`,
     category: "eyelashes",
@@ -55,7 +50,6 @@ const BEAUTY_PRODUCTS = [
     country: ["USA", "France"][Math.floor(Math.random() * 2)],
     id: `eyelashes-${i + 1}`
   })),
-  // Lip Products (400 products)
   ...Array.from({ length: 400 }, (_, i) => ({
     name: `Lip Gloss ${i + 1}`,
     category: "lip products",
@@ -65,7 +59,6 @@ const BEAUTY_PRODUCTS = [
     country: ["USA", "Canada"][Math.floor(Math.random() * 2)],
     id: `lipproducts-${i + 1}`
   })),
-  // Global (200 products)
   ...Array.from({ length: 200 }, (_, i) => ({
     name: `Global Beauty Product ${i + 1}`,
     category: "global",
@@ -83,7 +76,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Root route to prevent 404s
+// Root route
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
@@ -105,7 +98,6 @@ app.get('/health', (req, res) => {
 app.get('/api/products/search', (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase() : '';
   console.log(`Search query: ${query}`);
-
   try {
     const products = BEAUTY_PRODUCTS.filter(product =>
       product && (
@@ -117,16 +109,14 @@ app.get('/api/products/search', (req, res) => {
         product.country?.toLowerCase().includes(query)
       )
     );
-
     const brands = [...new Set(products.map(p => p.brand).filter(Boolean))];
     const countries = [...new Set(products.map(p => p.country).filter(Boolean))];
-
     console.log(`Returning ${products.length} products for query: ${query}`);
     res.json({
       success: true,
       products: products.slice(0, 100).map(product => ({
         ...product,
-        price: product.price.toString() // Ensure string for frontend
+        price: product.price.toString()
       })),
       stats: {
         productCount: products.length,
@@ -149,11 +139,9 @@ app.get('/api/products/search', (req, res) => {
 app.post('/api/chat/claude', (req, res) => {
   const { message, context } = req.body || {};
   console.log(`Chat query: ${message}, Context: ${context}`);
-
   if (!message || !context) {
     return res.status(400).json({ success: false, error: 'Missing message or context' });
   }
-
   try {
     const query = message.toLowerCase();
     const products = BEAUTY_PRODUCTS
@@ -168,12 +156,10 @@ app.post('/api/chat/claude', (req, res) => {
         )
       )
       .slice(0, 3);
-
     const responseText = products.length > 0 ?
       `Here are some ${context} products matching "${message}":\n` +
       products.map(p => `- ${p.name} by ${p.brand} ($${p.price.toString()}): ${p.description}`).join('\n') :
       `No products found for "${message}". Try a topic like K-Beauty or ask for specific products.`;
-
     res.json({ success: true, response: responseText });
   } catch (error) {
     console.error('Chat error:', error.message);
@@ -181,7 +167,7 @@ app.post('/api/chat/claude', (req, res) => {
   }
 });
 
-// Error handling (line ~181)
+// Error handling
 app.use((err, req, res, next) => {
   console.error('Server error:', err.message);
   res.status(500).json({ success: false, error: 'Internal Server Error' });
