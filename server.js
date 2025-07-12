@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
-
 // Dataset with ~3100 products, price as numbers
 const BEAUTY_PRODUCTS = [
   ...Array.from({ length: 600 }, (_, i) => ({
