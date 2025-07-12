@@ -78,6 +78,17 @@ const categoryCounts = BEAUTY_PRODUCTS.reduce((acc, p) => {
 console.log(`BEAUTY_PRODUCTS total: ${BEAUTY_PRODUCTS.length}`);
 console.log('Category breakdown:', JSON.stringify(categoryCounts));
 
+// Query alias mapping for common terms
+const QUERY_ALIASES = {
+  'skincare': ['k-beauty', 'anti-aging', 'eye care'],
+  'antiaging': ['anti-aging'],
+  'kbeauty': ['k-beauty'],
+  'eyecare': ['eye care'],
+  'lipproducts': ['lip products'],
+  'haircare': [], // No haircare products, will return empty
+  'tools': [] // No tools products, will return empty
+};
+
 app.use(cors({
   origin: 'https://beauty-static-live.onrender.com',
 }));
@@ -104,12 +115,19 @@ app.get('/health', (req, res) => {
 
 // Search endpoint
 app.get('/api/products/search', (req, res) => {
-  const query = req.query.q ? req.query.q.toLowerCase() : '';
-  console.log(`Search query: ${query}, requestID: ${req.headers['x-request-id'] || 'unknown'}`);
+  const query = req.query.q ? req.query.q.toLowerCase().replace(/[^a-z0-9-]/g, '') : '';
+  const requestId = req.headers['x-request-id'] || 'unknown';
+  console.log(`Search query: ${query}, requestID: ${requestId}`);
   try {
+    let categoriesToMatch = [query];
+    if (QUERY_ALIASES[query]) {
+      categoriesToMatch = QUERY_ALIASES[query];
+      console.log(`Mapped query ${query} to categories: ${categoriesToMatch.join(', ')}`);
+    }
     const products = BEAUTY_PRODUCTS.filter(product =>
       product && (
-        query === '' || query === 'global' || // Explicitly return all products for 'global'
+        query === '' || query === 'global' || // Return all products for empty or 'global'
+        categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
         product.category?.toLowerCase().includes(query) ||
         product.name?.toLowerCase().includes(query) ||
         product.brand?.toLowerCase().includes(query) ||
@@ -134,7 +152,7 @@ app.get('/api/products/search', (req, res) => {
       },
     });
   } catch (error) {
-    console.error(`Search error for query ${query}: ${error.message}, stack: ${error.stack}`);
+    console.error(`Search error for query ${query}: ${error.message}, stack: ${error.stack}, requestID: ${requestId}`);
     res.status(500).json({
       success: false,
       error: 'Failed to process search',
@@ -159,11 +177,17 @@ app.post('/api/chat/claude', async (req, res) => {
       res.status(503).json({ success: false, error: 'Request timeout' });
     }, 10000); // 10-second timeout
 
-    const query = message.toLowerCase();
+    const query = message.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    let categoriesToMatch = [query];
+    if (QUERY_ALIASES[query]) {
+      categoriesToMatch = QUERY_ALIASES[query];
+      console.log(`Mapped chat query ${query} to categories: ${categoriesToMatch.join(', ')}`);
+    }
     const products = BEAUTY_PRODUCTS
       .filter(product =>
         product && (
-          query === '' || query === 'global' || // Explicitly return all products for 'global'
+          query === '' || query === 'global' || // Return all products for 'global'
+          categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
           product.category?.toLowerCase().includes(query) ||
           product.name?.toLowerCase().includes(query) ||
           product.brand?.toLowerCase().includes(query) ||
