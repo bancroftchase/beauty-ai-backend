@@ -109,7 +109,7 @@ app.get('/api/products/search', (req, res) => {
   try {
     const products = BEAUTY_PRODUCTS.filter(product =>
       product && (
-        query === '' ||
+        query === '' || query === 'global' || // Explicitly return all products for 'global'
         product.category?.toLowerCase().includes(query) ||
         product.name?.toLowerCase().includes(query) ||
         product.brand?.toLowerCase().includes(query) ||
@@ -156,7 +156,7 @@ app.post('/api/chat/claude', (req, res) => {
     const products = BEAUTY_PRODUCTS
       .filter(product =>
         product && (
-          query === '' ||
+          query === '' || query === 'global' || // Explicitly return all products for 'global'
           product.category?.toLowerCase().includes(query) ||
           product.name?.toLowerCase().includes(query) ||
           product.brand?.toLowerCase().includes(query) ||
