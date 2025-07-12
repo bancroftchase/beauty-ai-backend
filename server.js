@@ -7,7 +7,7 @@ const port = process.env.PORT || 3000;
 const BEAUTY_PRODUCTS = [
   // Anti-Aging (600 products)
   ...Array.from({ length: 600 }, (_, i) => ({
-    name: `Anti-Aging Serum ${i + 1}`,
+    name: `Anti Aging Serum ${i + 1}`,
     category: "anti-aging",
     brand: `AgeDefy${Math.floor(i / 50) + 1}`,
     price: (20 + Math.random() * 100).toFixed(2),
@@ -17,7 +17,7 @@ const BEAUTY_PRODUCTS = [
   })),
   // K-Beauty (600 products)
   ...Array.from({ length: 600 }, (_, i) => ({
-    name: `K-Beauty Essence ${i + 1}`,
+    name: `K Beauty Essence ${i + 1}`,
     category: "k-beauty",
     brand: `KBeauty${Math.floor(i / 50) + 1}`,
     price: (10 + Math.random() * 60).toFixed(2),
@@ -93,7 +93,7 @@ app.get('/health', (req, res) => {
 });
 
 // Search endpoint
-app.get('/api/products/search', async (req, res) => {
+app.get('/api/products/search', (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase() : '';
   console.log(`Search query: ${query}`);
 
@@ -134,7 +134,7 @@ app.get('/api/products/search', async (req, res) => {
 });
 
 // Chat endpoint
-app.post('/api/chat/claude', async (req, res) => {
+app.post('/api/chat/claude', (req, res) => {
   const { message, context } = req.body || {};
   console.log(`Chat query: ${message}, Context: ${context}`);
 
@@ -177,5 +177,4 @@ app.use((err, req, res, next) => {
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-});
 });
