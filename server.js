@@ -90,7 +90,9 @@ const QUERY_ALIASES = {
 };
 
 app.use(cors({
-  origin: 'https://beauty-static-live.onrender.com',
+  origin: ['https://beauty-static-live.onrender.com', 'https://beautystatic.onrender.com'],
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Accept']
 }));
 app.use(express.json());
 
