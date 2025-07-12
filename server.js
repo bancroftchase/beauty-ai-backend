@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
+
 // Dataset with ~3100 products, price as numbers
 const BEAUTY_PRODUCTS = [
   ...Array.from({ length: 600 }, (_, i) => ({
@@ -68,7 +69,14 @@ const BEAUTY_PRODUCTS = [
     id: `global-${i + 1}`
   }))
 ].filter(p => p && p.name && p.category && p.brand && p.price && p.description && p.id);
+
+// Log dataset breakdown for debugging
+const categoryCounts = BEAUTY_PRODUCTS.reduce((acc, p) => {
+  acc[p.category] = (acc[p.category] || 0) + 1;
+  return acc;
+}, {});
 console.log(`BEAUTY_PRODUCTS total: ${BEAUTY_PRODUCTS.length}`);
+console.log('Category breakdown:', JSON.stringify(categoryCounts));
 
 app.use(cors({
   origin: 'https://beauty-static-live.onrender.com',
@@ -89,6 +97,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     productsCount: BEAUTY_PRODUCTS.length,
+    categoryBreakdown: categoryCounts,
     timestamp: new Date().toISOString()
   });
 });
@@ -111,6 +120,7 @@ app.get('/api/products/search', (req, res) => {
     const brands = [...new Set(products.map(p => p.brand).filter(Boolean))];
     const countries = [...new Set(products.map(p => p.country).filter(Boolean))];
     console.log(`Returning ${products.length} products for query: ${query}`);
+    console.log(`Filtered categories: ${[...new Set(products.map(p => p.category))].join(', ')}`);
     res.json({
       success: true,
       products: products.slice(0, 100).map(product => ({
@@ -155,6 +165,7 @@ app.post('/api/chat/claude', (req, res) => {
         )
       )
       .slice(0, 3);
+    console.log(`Chat returned ${products.length} products for query: ${query}`);
     const responseText = products.length > 0 ?
       `Here are some ${context} products matching "${message}":\n` +
       products.map(p => `- ${p.name} by ${p.brand} ($${p.price.toString()}): ${p.description}`).join('\n') :
