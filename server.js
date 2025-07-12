@@ -10,7 +10,7 @@ const BEAUTY_PRODUCTS = [
     name: `Anti Aging Serum ${i + 1}`,
     category: "anti-aging",
     brand: `AgeDefy${Math.floor(i / 50) + 1}`,
-    price: 20 + Math.random() * 100, // Store as number
+    price: (20 + Math.random() * 100).toFixed(2),
     description: `Reduces wrinkles and boosts firmness, #${i + 1}.`,
     country: ["USA", "France", "Japan", "South Korea"][Math.floor(Math.random() * 4)],
     id: `antiaging-${i + 1}`
@@ -20,7 +20,7 @@ const BEAUTY_PRODUCTS = [
     name: `K Beauty Essence ${i + 1}`,
     category: "k-beauty",
     brand: `KBeauty${Math.floor(i / 50) + 1}`,
-    price: 10 + Math.random() * 60,
+    price: (10 + Math.random() * 60).toFixed(2),
     description: `Hydrating essence for radiant skin, #${i + 1}.`,
     country: "South Korea",
     id: `kbeauty-${i + 1}`
@@ -30,7 +30,7 @@ const BEAUTY_PRODUCTS = [
     name: `Eye Cream ${i + 1}`,
     category: "eye care",
     brand: `EyeCare${Math.floor(i / 50) + 1}`,
-    price: 15 + Math.random() * 70,
+    price: (15 + Math.random() * 70).toFixed(2),
     description: `Reduces puffiness and dark circles, #${i + 1}.`,
     country: ["USA", "UK", "Germany"][Math.floor(Math.random() * 3)],
     id: `eyecare-${i + 1}`
@@ -40,7 +40,7 @@ const BEAUTY_PRODUCTS = [
     name: `Tanning Lotion ${i + 1}`,
     category: "tanning",
     brand: `TanGlow${Math.floor(i / 50) + 1}`,
-    price: 12 + Math.random() * 50,
+    price: (12 + Math.random() * 50).toFixed(2),
     description: `Natural glow tanning lotion, #${i + 1}.`,
     country: ["Australia", "USA"][Math.floor(Math.random() * 2)],
     id: `tanning-${i + 1}`
@@ -50,7 +50,7 @@ const BEAUTY_PRODUCTS = [
     name: `Eyelash Serum ${i + 1}`,
     category: "eyelashes",
     brand: `LashBoost${Math.floor(i / 50) + 1}`,
-    price: 25 + Math.random() * 80,
+    price: (25 + Math.random() * 80).toFixed(2),
     description: `Enhances lash growth, #${i + 1}.`,
     country: ["USA", "France"][Math.floor(Math.random() * 2)],
     id: `eyelashes-${i + 1}`
@@ -60,7 +60,7 @@ const BEAUTY_PRODUCTS = [
     name: `Lip Gloss ${i + 1}`,
     category: "lip products",
     brand: `LipShine${Math.floor(i / 50) + 1}`,
-    price: 5 + Math.random() * 25,
+    price: (5 + Math.random() * 25).toFixed(2),
     description: `Hydrating and glossy lip product, #${i + 1}.`,
     country: ["USA", "Canada"][Math.floor(Math.random() * 2)],
     id: `lipproducts-${i + 1}`
@@ -70,7 +70,7 @@ const BEAUTY_PRODUCTS = [
     name: `Global Beauty Product ${i + 1}`,
     category: "global",
     brand: `WorldBeauty${Math.floor(i / 20) + 1}`,
-    price: 10 + Math.random() * 120,
+    price: (10 + Math.random() * 120).toFixed(2),
     description: `Unique beauty product from global trends, #${i + 1}.`,
     country: ["Brazil", "India", "Italy", "South Africa"][Math.floor(Math.random() * 4)],
     id: `global-${i + 1}`
@@ -124,10 +124,7 @@ app.get('/api/products/search', (req, res) => {
     console.log(`Returning ${products.length} products for query: ${query}`);
     res.json({
       success: true,
-      products: products.slice(0, 100).map(product => ({
-        ...product,
-        price: Number(product.price).toFixed(2) // Convert to string with 2 decimals for frontend
-      })),
+      products: products.slice(0, 100), // Limit for performance
       stats: {
         productCount: products.length,
         brandCount: brands.length,
