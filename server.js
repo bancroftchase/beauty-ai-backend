@@ -89,8 +89,7 @@ const QUERY_ALIASES = {
   'lipproducts': ['lip products'],
   'haircare': [],
   'tools': [],
-  'natural': ['global', 'k-beauty'],
-  'organic': ['global', 'k-beauty']
+  'global': ['global']
 };
 
 app.use(cors({
@@ -100,10 +99,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
 
 // Search Rainforest API
 async function searchRainforest(query) {
+  if (!process.env.RAINFOREST_API_KEY) return [];
   try {
     const response = await axios.get('https://api.rainforestapi.com/request', {
       params: {
@@ -120,7 +120,7 @@ async function searchRainforest(query) {
         id: item.asin || `rainforest-${Math.random().toString(36).slice(2)}`,
         name: item.title || 'Unknown Product',
         brand: item.brand || 'Unknown Brand',
-        price: parseFloat(item.price?.value || 0),
+        price: parseFloat(item.price?.value || 0).toFixed(2),
         description: item.description || 'No description available',
         country: 'USA',
         category: 'beauty'
@@ -135,6 +135,7 @@ async function searchRainforest(query) {
 
 // Query Claude
 async function queryClaude(query, context) {
+  if (!anthropic) return [];
   try {
     const response = await anthropic.messages.create({
       model: 'claude-3-opus-20240229',
@@ -235,46 +236,58 @@ app.post('/api/chat/claude', async (req, res) => {
     let source = 'local';
     let searchQuery = message.toLowerCase().replace(/[^a-z0-9-]/g, ' ');
 
-    if (process.env.ANTHROPIC_API_KEY) {
-      products = await queryClaude(searchQuery, context);
-      if (products.length > 0) source = 'claude';
+    // Prioritize local dataset for global products
+    let categoriesToMatch = [];
+    const queryTerms = searchQuery.split(' ').filter(term => term);
+    queryTerms.forEach(term => {
+      if (QUERY_ALIASES[term]) {
+        categoriesToMatch.push(...QUERY_ALIASES[term]);
+      } else {
+        categoriesToMatch.push(term);
+      }
+    });
+    categoriesToMatch = [...new Set(categoriesToMatch)];
+    if (queryTerms.includes('global') || queryTerms.includes('world')) {
+      categoriesToMatch = ['global'];
+    }
+    products = BEAUTY_PRODUCTS.filter(product =>
+      product && (
+        categoriesToMatch.includes('global') ||
+        categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
+        queryTerms.some(term =>
+          product.category?.toLowerCase().includes(term) ||
+          product.name?.toLowerCase().includes(term) ||
+          product.brand?.toLowerCase().includes(term) ||
+          product.description?.toLowerCase().includes(term) ||
+          product.country?.toLowerCase().includes(term)
+        )
+      )
+    );
+    if (products.length > 0) {
+      console.log(`Local dataset returned ${products.length} products for query: ${message}`);
     }
 
-    if (products.length === 0 && process.env.RAINFOREST_API_KEY) {
+    // Try Rainforest API
+    if (products.length < 50 && process.env.RAINFOREST_API_KEY) {
       products = await searchRainforest(searchQuery);
       if (products.length > 0) source = 'rainforest';
     }
 
-    if (products.length === 0) {
-      let categoriesToMatch = [];
-      const queryTerms = searchQuery.split(' ').filter(term => term);
-      queryTerms.forEach(term => {
-        if (QUERY_ALIASES[term]) {
-          categoriesToMatch.push(...QUERY_ALIASES[term]);
-        } else {
-          categoriesToMatch.push(term);
-        }
-      });
-      categoriesToMatch = [...new Set(categoriesToMatch)];
-      products = BEAUTY_PRODUCTS.filter(product =>
-        product && (
-          queryTerms.includes('global') ||
-          categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
-          queryTerms.some(term =>
-            product.category?.toLowerCase().includes(term) ||
-            product.name?.toLowerCase().includes(term) ||
-            product.brand?.toLowerCase().includes(term) ||
-            product.description?.toLowerCase().includes(term) ||
-            product.country?.toLowerCase().includes(term)
-          )
-        )
-      );
+    // Try Claude API
+    if (products.length < 50 && anthropic) {
+      products = await queryClaude(searchQuery, context);
+      if (products.length > 0) source = 'claude';
     }
 
+    const responseText = products.length > 0 ?
+      `Here are some ${context} products matching "${message}":\n` +
+      products.slice(0, 50).map(p => `- ${p.name} by ${p.brand} ($${p.price}): ${p.description}`).join('\n') :
+      `No products found for "${message}". Try searching for categories like Global, K-Beauty, or Anti-Aging.`;
     clearTimeout(timeout);
     console.log(`Returning ${products.length} products for query: ${message}, source: ${source}`);
     res.json({
       success: true,
+      response: responseText,
       products: products.slice(0, 200),
       stats: {
         productCount: products.length,
