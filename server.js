@@ -1,11 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Dataset with ~3100 products
+// Dataset with ~3100 products (keeping same as before)
 const BEAUTY_PRODUCTS = [
   ...Array.from({ length: 600 }, (_, i) => ({
     name: `Anti Aging Serum ${i + 1}`,
@@ -72,16 +71,14 @@ const BEAUTY_PRODUCTS = [
   }))
 ].filter(p => p && p.name && p.category && p.brand && p.price && p.description && p.id);
 
-// Log dataset breakdown
 const categoryCounts = BEAUTY_PRODUCTS.reduce((acc, p) => {
   acc[p.category] = (acc[p.category] || 0) + 1;
   return acc;
 }, {});
 
 console.log(`🚀 BEAUTY_PRODUCTS total: ${BEAUTY_PRODUCTS.length}`);
-console.log('📊 Category breakdown:', JSON.stringify(categoryCounts));
 
-// Query alias mapping
+// Query aliases
 const QUERY_ALIASES = {
   'skincare': ['k-beauty', 'anti-aging', 'eye care'],
   'antiaging': ['anti-aging'],
@@ -92,17 +89,14 @@ const QUERY_ALIASES = {
   'organic': ['global', 'k-beauty']
 };
 
-// CORS setup
 app.use(cors({
   origin: true,
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Accept', 'X-Request-ID', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Accept', 'X-Request-ID'],
   credentials: false
 }));
 
 app.use(express.json({ limit: '10mb' }));
-
-const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
 
 // Enhanced Rainforest API search
 async function searchRainforest(query) {
@@ -149,38 +143,62 @@ async function searchRainforest(query) {
   }
 }
 
-// Enhanced Claude API search
-async function queryClaude(query, context) {
-  if (!anthropic) {
-    console.log('🤖 Claude API key not available');
+// Gemini API search function
+async function queryGemini(query, context) {
+  if (!process.env.GEMINI_API_KEY) {
+    console.log('💎 Gemini API key not available');
     return [];
   }
   
   try {
-    console.log(`🤖 Claude searching for: "${query}"`);
+    console.log(`💎 Gemini searching for: "${query}"`);
     
-    const response = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
-      max_tokens: 3000,
-      messages: [{
-        role: 'user',
-        content: `Generate 30-50 diverse beauty products for "${query}". Return ONLY valid JSON array: [{"id":"claude-1","name":"...","brand":"...","price":25.99,"description":"...","country":"USA","category":"skincare"}]`
-      }]
-    });
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [{
+          parts: [{
+            text: `Generate 30-50 diverse beauty products for the search term "${query}" in the context of ${context}. 
+
+Include products from various countries (USA, South Korea, Japan, France, Germany, UK, Australia, Canada, Brazil, India, Italy) and different price ranges ($5-$200).
+
+For each product, provide:
+- id: "gemini-[unique-id]"
+- name: realistic product name
+- brand: realistic brand name
+- price: number between 5 and 200
+- description: detailed description
+- country: country of origin
+- category: skincare, makeup, haircare, fragrance, or beauty
+
+Return ONLY a valid JSON array with no other text:
+[{"id":"gemini-1","name":"Ultra Hydrating Face Serum","brand":"Seoul Glow","price":45.99,"description":"Advanced Korean skincare with hyaluronic acid","country":"South Korea","category":"skincare"}]`
+          }]
+        }]
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      }
+    );
     
-    const responseText = response.content[0].text || '[]';
+    const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    console.log(`💎 Gemini raw response length: ${responseText.length}`);
+    
+    // Extract JSON from response
     let jsonData = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    
     const arrayMatch = jsonData.match(/\[[\s\S]*\]/);
     if (arrayMatch) {
       jsonData = arrayMatch[0];
     }
     
     const products = JSON.parse(jsonData);
-    console.log(`🤖 Claude generated ${products.length} products`);
+    console.log(`💎 Gemini generated ${products.length} products`);
     
     return products.map((product, index) => ({
-      id: product.id || `claude-${query}-${index}`,
+      id: product.id || `gemini-${query}-${index}`,
       name: product.name || `Beauty Product ${index + 1}`,
       brand: product.brand || 'Premium Beauty',
       price: Number(product.price) || (Math.random() * 100 + 15),
@@ -190,7 +208,7 @@ async function queryClaude(query, context) {
     }));
     
   } catch (error) {
-    console.error('🤖 Claude API error:', error.message);
+    console.error('💎 Gemini API error:', error.message);
     return [];
   }
 }
@@ -199,10 +217,10 @@ async function queryClaude(query, context) {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Beauty AI Backend - Complete Version',
-    endpoints: ['/health', '/api/products/search', '/api/chat/claude', '/debug/keys', '/test/all-products', '/debug/search'],
+    message: 'Beauty AI Backend - Gemini Test Version',
+    endpoints: ['/health', '/api/products/search', '/api/chat/gemini', '/debug/keys', '/test/all-products'],
     totalProducts: BEAUTY_PRODUCTS.length,
-    version: '2.0-complete'
+    version: '2.1-gemini-test'
   });
 });
 
@@ -213,7 +231,7 @@ app.get('/health', (req, res) => {
     productsCount: BEAUTY_PRODUCTS.length,
     timestamp: new Date().toISOString(),
     rainforestEnabled: !!process.env.RAINFOREST_API_KEY,
-    claudeEnabled: !!process.env.ANTHROPIC_API_KEY
+    geminiEnabled: !!process.env.GEMINI_API_KEY
   });
 });
 
@@ -222,96 +240,27 @@ app.get('/debug/keys', (req, res) => {
   console.log('🔑 Debug: Checking API keys');
   res.json({
     rainforestEnabled: !!process.env.RAINFOREST_API_KEY,
-    claudeEnabled: !!process.env.ANTHROPIC_API_KEY,
+    geminiEnabled: !!process.env.GEMINI_API_KEY,
     rainforestKeyLength: process.env.RAINFOREST_API_KEY ? process.env.RAINFOREST_API_KEY.length : 0,
-    claudeKeyLength: process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.length : 0,
+    geminiKeyLength: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length : 0,
+    allEnvVars: Object.keys(process.env).filter(key => key.includes('API') || key.includes('KEY')),
     timestamp: new Date().toISOString()
   });
 });
 
-// DEBUG: ALL PRODUCTS TEST
+// TEST: ALL PRODUCTS
 app.get('/test/all-products', (req, res) => {
-  console.log(`📊 Debug: Returning ALL ${BEAUTY_PRODUCTS.length} products`);
+  console.log(`📊 Returning ALL ${BEAUTY_PRODUCTS.length} products`);
   
   res.json({
     success: true,
     totalProducts: BEAUTY_PRODUCTS.length,
-    products: BEAUTY_PRODUCTS, // Return ALL products - NO LIMITS
+    products: BEAUTY_PRODUCTS,
     categories: categoryCounts
   });
 });
 
-// DEBUG: SEARCH LOGIC TEST
-app.get('/debug/search', async (req, res) => {
-  const query = req.query.q ? req.query.q.toLowerCase().trim() : 'global';
-  
-  console.log(`🔍 Debug search for: "${query}"`);
-  
-  try {
-    // Test local product matching
-    let categoriesToMatch = [query];
-    if (QUERY_ALIASES[query]) {
-      categoriesToMatch.push(...QUERY_ALIASES[query]);
-    }
-    
-    const localProducts = BEAUTY_PRODUCTS.filter(product => {
-      if (!product) return false;
-      
-      const searchTerms = query.split(' ');
-      
-      return query === 'global' ||
-        categoriesToMatch.some(cat => product.category?.toLowerCase().includes(cat)) ||
-        searchTerms.some(term => 
-          product.category?.toLowerCase().includes(term) ||
-          product.name?.toLowerCase().includes(term) ||
-          product.brand?.toLowerCase().includes(term) ||
-          product.description?.toLowerCase().includes(term) ||
-          product.country?.toLowerCase().includes(term)
-        );
-    });
-    
-    // Remove duplicates
-    const uniqueProducts = [];
-    const seenNames = new Set();
-    
-    localProducts.forEach(product => {
-      const key = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!seenNames.has(key)) {
-        seenNames.add(key);
-        uniqueProducts.push(product);
-      }
-    });
-    
-    console.log(`🔍 Debug results: ${uniqueProducts.length} products found`);
-    
-    res.json({
-      success: true,
-      debug: true,
-      query: query,
-      totalInDatabase: BEAUTY_PRODUCTS.length,
-      categoriesToMatch: categoriesToMatch,
-      localProductsFound: localProducts.length,
-      afterDeduplication: uniqueProducts.length,
-      finalCount: uniqueProducts.length,
-      products: uniqueProducts, // Return ALL found products
-      stats: {
-        productCount: uniqueProducts.length,
-        source: 'local-debug',
-        breakdown: categoryCounts
-      }
-    });
-    
-  } catch (error) {
-    console.error(`❌ Debug error:`, error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      debug: true
-    });
-  }
-});
-
-// MAIN SEARCH ENDPOINT - NO LIMITS
+// MAIN SEARCH ENDPOINT
 app.get('/api/products/search', async (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase().trim() : 'global';
   const requestId = req.headers['x-request-id'] || Math.random().toString(36).slice(2);
@@ -322,7 +271,7 @@ app.get('/api/products/search', async (req, res) => {
     let allProducts = [];
     let apiSources = [];
 
-    // Run APIs in parallel if available
+    // Run APIs in parallel
     const apiPromises = [];
 
     if (process.env.RAINFOREST_API_KEY && query !== 'global') {
@@ -333,11 +282,11 @@ app.get('/api/products/search', async (req, res) => {
       );
     }
 
-    if (process.env.ANTHROPIC_API_KEY && query !== 'global') {
+    if (process.env.GEMINI_API_KEY && query !== 'global') {
       apiPromises.push(
-        queryClaude(query, 'beauty products')
-          .then(products => ({ source: 'claude', products }))
-          .catch(() => ({ source: 'claude', products: [] }))
+        queryGemini(query, 'beauty products')
+          .then(products => ({ source: 'gemini', products }))
+          .catch(() => ({ source: 'gemini', products: [] }))
       );
     }
 
@@ -355,7 +304,7 @@ app.get('/api/products/search', async (req, res) => {
       });
     }
 
-    // ALWAYS add local products
+    // Add local products
     console.log(`📚 Adding local products...`);
     
     let categoriesToMatch = [query];
@@ -395,7 +344,7 @@ app.get('/api/products/search', async (req, res) => {
       }
     });
 
-    // Shuffle for variety
+    // Shuffle
     for (let i = uniqueProducts.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
@@ -404,18 +353,16 @@ app.get('/api/products/search', async (req, res) => {
     const sourceString = apiSources.join('+');
     
     console.log(`🎉 FINAL: ${uniqueProducts.length} products from [${sourceString}]`);
-    console.log(`🔍 SEARCH COMPLETE - ID: ${requestId}\n`);
     
-    // RETURN ALL PRODUCTS - ABSOLUTELY NO LIMITS
+    // RETURN ALL PRODUCTS - NO LIMITS
     res.json({
       success: true,
-      products: uniqueProducts, // NO .slice() ANYWHERE!
+      products: uniqueProducts,
       stats: {
         productCount: uniqueProducts.length,
         source: sourceString,
-        totalBeforeDedup: allProducts.length,
         rainforestCount: allProducts.filter(p => p.id?.includes('rainforest')).length,
-        claudeCount: allProducts.filter(p => p.id?.includes('claude')).length,
+        geminiCount: allProducts.filter(p => p.id?.includes('gemini')).length,
         localCount: localProducts.length,
         requestId: requestId
       }
@@ -426,18 +373,14 @@ app.get('/api/products/search', async (req, res) => {
     res.status(500).json({
       success: false,
       products: [],
-      error: error.message,
-      stats: { productCount: 0, source: 'error' }
+      error: error.message
     });
   }
 });
 
-// CHAT ENDPOINT
-app.post('/api/chat/claude', async (req, res) => {
+// CHAT ENDPOINT WITH GEMINI
+app.post('/api/chat/gemini', async (req, res) => {
   const { message, context } = req.body || {};
-  const requestId = req.headers['x-request-id'] || Math.random().toString(36).slice(2);
-  
-  console.log(`💬 Chat: "${message}", ID: ${requestId}`);
   
   if (!message) {
     return res.status(400).json({ 
@@ -463,11 +406,11 @@ app.post('/api/chat/claude', async (req, res) => {
       );
     }
 
-    if (process.env.ANTHROPIC_API_KEY) {
+    if (process.env.GEMINI_API_KEY) {
       promises.push(
-        queryClaude(searchQuery, context || 'beauty')
-          .then(products => ({ source: 'claude', products }))
-          .catch(() => ({ source: 'claude', products: [] }))
+        queryGemini(searchQuery, context || 'beauty')
+          .then(products => ({ source: 'gemini', products }))
+          .catch(() => ({ source: 'gemini', products: [] }))
       );
     }
 
@@ -487,15 +430,14 @@ app.post('/api/chat/claude', async (req, res) => {
       return searchTerms.some(term =>
         product.name?.toLowerCase().includes(term) ||
         product.category?.toLowerCase().includes(term) ||
-        product.brand?.toLowerCase().includes(term) ||
-        product.description?.toLowerCase().includes(term)
+        product.brand?.toLowerCase().includes(term)
       ) || searchQuery === 'global';
     });
 
     allProducts.push(...localProducts);
     sources.push('local');
 
-    // Deduplicate
+    // Deduplicate and shuffle
     const uniqueProducts = [];
     const seen = new Set();
     
@@ -507,22 +449,17 @@ app.post('/api/chat/claude', async (req, res) => {
       }
     });
 
-    // Shuffle
     for (let i = uniqueProducts.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
     }
 
-    console.log(`💬 Chat result: ${uniqueProducts.length} products`);
-    
-    // Return ALL products
     res.json({
       success: true,
-      products: uniqueProducts, // NO LIMITS!
+      products: uniqueProducts,
       stats: {
         productCount: uniqueProducts.length,
-        source: sources.join('+'),
-        requestId: requestId
+        source: sources.join('+')
       }
     });
 
@@ -537,16 +474,13 @@ app.post('/api/chat/claude', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`\n🚀 Beauty AI Backend (Complete) running on port ${port}`);
+  console.log(`\n🚀 Beauty AI Backend (Gemini Test) running on port ${port}`);
   console.log(`📊 ${BEAUTY_PRODUCTS.length} local products loaded`);
   console.log(`🌧️ Rainforest API: ${process.env.RAINFOREST_API_KEY ? 'ENABLED ✅' : 'DISABLED ❌'}`);
-  console.log(`🤖 Claude API: ${process.env.ANTHROPIC_API_KEY ? 'ENABLED ✅' : 'DISABLED ❌'}`);
-  console.log(`🔗 Available endpoints:`);
-  console.log(`   GET  / - Root info`);
-  console.log(`   GET  /health - Health check`);
-  console.log(`   GET  /debug/keys - API key status`);
-  console.log(`   GET  /test/all-products - All 3100 products`);
-  console.log(`   GET  /debug/search?q=... - Debug search logic`);
-  console.log(`   GET  /api/products/search?q=... - Main search`);
-  console.log(`   POST /api/chat/claude - Chat endpoint\n`);
+  console.log(`💎 Gemini API: ${process.env.GEMINI_API_KEY ? 'ENABLED ✅' : 'DISABLED ❌'}`);
+  console.log(`🔍 Environment variables containing 'API' or 'KEY':`);
+  Object.keys(process.env).filter(key => key.includes('API') || key.includes('KEY')).forEach(key => {
+    console.log(`   ${key}: ${process.env[key] ? 'SET' : 'NOT SET'}`);
+  });
+  console.log();
 });
