@@ -4,7 +4,7 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Dataset with ~3100 products (keeping same as before)
+// Dataset with ~3100 products (same as before)
 const BEAUTY_PRODUCTS = [
   ...Array.from({ length: 600 }, (_, i) => ({
     name: `Anti Aging Serum ${i + 1}`,
@@ -98,10 +98,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
-// Enhanced Rainforest API search
+// Rainforest API search (simplified for now)
 async function searchRainforest(query) {
   if (!process.env.RAINFOREST_API_KEY) {
-    console.log('🌧️ Rainforest API key not available');
     return [];
   }
   
@@ -114,14 +113,13 @@ async function searchRainforest(query) {
         type: 'search',
         amazon_domain: 'amazon.com',
         search_term: query,
-        category_id: 'beauty',
-        max_page: 2
+        category_id: 'beauty'
       },
-      timeout: 10000
+      timeout: 8000
     });
     
     if (response.data.search_results) {
-      const products = response.data.search_results.map((item, index) => ({
+      const products = response.data.search_results.slice(0, 50).map((item, index) => ({
         id: item.asin || `rainforest-${query}-${index}`,
         name: item.title || `Beauty Product ${index + 1}`,
         brand: item.brand || 'Premium Beauty',
@@ -143,84 +141,14 @@ async function searchRainforest(query) {
   }
 }
 
-// Gemini API search function
-async function queryGemini(query, context) {
-  if (!process.env.GEMINI_API_KEY) {
-    console.log('💎 Gemini API key not available');
-    return [];
-  }
-  
-  try {
-    console.log(`💎 Gemini searching for: "${query}"`);
-    
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        contents: [{
-          parts: [{
-            text: `Generate 30-50 diverse beauty products for the search term "${query}" in the context of ${context}. 
-
-Include products from various countries (USA, South Korea, Japan, France, Germany, UK, Australia, Canada, Brazil, India, Italy) and different price ranges ($5-$200).
-
-For each product, provide:
-- id: "gemini-[unique-id]"
-- name: realistic product name
-- brand: realistic brand name
-- price: number between 5 and 200
-- description: detailed description
-- country: country of origin
-- category: skincare, makeup, haircare, fragrance, or beauty
-
-Return ONLY a valid JSON array with no other text:
-[{"id":"gemini-1","name":"Ultra Hydrating Face Serum","brand":"Seoul Glow","price":45.99,"description":"Advanced Korean skincare with hyaluronic acid","country":"South Korea","category":"skincare"}]`
-          }]
-        }]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 15000
-      }
-    );
-    
-    const responseText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    console.log(`💎 Gemini raw response length: ${responseText.length}`);
-    
-    // Extract JSON from response
-    let jsonData = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    const arrayMatch = jsonData.match(/\[[\s\S]*\]/);
-    if (arrayMatch) {
-      jsonData = arrayMatch[0];
-    }
-    
-    const products = JSON.parse(jsonData);
-    console.log(`💎 Gemini generated ${products.length} products`);
-    
-    return products.map((product, index) => ({
-      id: product.id || `gemini-${query}-${index}`,
-      name: product.name || `Beauty Product ${index + 1}`,
-      brand: product.brand || 'Premium Beauty',
-      price: Number(product.price) || (Math.random() * 100 + 15),
-      description: product.description || `High-quality beauty product for ${query}`,
-      country: product.country || 'Global',
-      category: product.category || 'beauty'
-    }));
-    
-  } catch (error) {
-    console.error('💎 Gemini API error:', error.message);
-    return [];
-  }
-}
-
 // ROOT ENDPOINT
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Beauty AI Backend - Gemini Test Version',
-    endpoints: ['/health', '/api/products/search', '/api/chat/gemini', '/debug/keys', '/test/all-products'],
+    message: 'Beauty AI Backend - Pagination Fixed',
+    endpoints: ['/health', '/api/products/search', '/debug/keys', '/test/stats'],
     totalProducts: BEAUTY_PRODUCTS.length,
-    version: '2.1-gemini-test'
+    version: '2.2-pagination'
   });
 });
 
@@ -243,65 +171,48 @@ app.get('/debug/keys', (req, res) => {
     geminiEnabled: !!process.env.GEMINI_API_KEY,
     rainforestKeyLength: process.env.RAINFOREST_API_KEY ? process.env.RAINFOREST_API_KEY.length : 0,
     geminiKeyLength: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length : 0,
-    allEnvVars: Object.keys(process.env).filter(key => key.includes('API') || key.includes('KEY')),
     timestamp: new Date().toISOString()
   });
 });
 
-// TEST: ALL PRODUCTS
-app.get('/test/all-products', (req, res) => {
-  console.log(`📊 Returning ALL ${BEAUTY_PRODUCTS.length} products`);
+// TEST: STATS ONLY (no massive product array)
+app.get('/test/stats', (req, res) => {
+  console.log(`📊 Returning stats for ${BEAUTY_PRODUCTS.length} products`);
   
   res.json({
     success: true,
     totalProducts: BEAUTY_PRODUCTS.length,
-    products: BEAUTY_PRODUCTS,
-    categories: categoryCounts
+    categories: categoryCounts,
+    sampleProducts: BEAUTY_PRODUCTS.slice(0, 5), // Just 5 samples
+    message: "Stats returned without full product list to avoid size limits"
   });
 });
 
-// MAIN SEARCH ENDPOINT
+// MAIN SEARCH ENDPOINT WITH PAGINATION
 app.get('/api/products/search', async (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase().trim() : 'global';
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 500; // Default 500 per page
   const requestId = req.headers['x-request-id'] || Math.random().toString(36).slice(2);
   
-  console.log(`\n🔍 SEARCH START - Query: "${query}", ID: ${requestId}`);
+  console.log(`\n🔍 SEARCH - Query: "${query}", Page: ${page}, Limit: ${limit}, ID: ${requestId}`);
   
   try {
     let allProducts = [];
     let apiSources = [];
 
-    // Run APIs in parallel
-    const apiPromises = [];
-
+    // Get API products (limited to avoid size issues)
     if (process.env.RAINFOREST_API_KEY && query !== 'global') {
-      apiPromises.push(
-        searchRainforest(query)
-          .then(products => ({ source: 'rainforest', products }))
-          .catch(() => ({ source: 'rainforest', products: [] }))
-      );
-    }
-
-    if (process.env.GEMINI_API_KEY && query !== 'global') {
-      apiPromises.push(
-        queryGemini(query, 'beauty products')
-          .then(products => ({ source: 'gemini', products }))
-          .catch(() => ({ source: 'gemini', products: [] }))
-      );
-    }
-
-    // Execute APIs
-    if (apiPromises.length > 0) {
-      console.log(`🚀 Running ${apiPromises.length} API calls...`);
-      const results = await Promise.all(apiPromises);
-      
-      results.forEach(result => {
-        if (result.products.length > 0) {
-          allProducts.push(...result.products);
-          apiSources.push(result.source);
-          console.log(`✅ ${result.source}: ${result.products.length} products`);
+      try {
+        const rainforestProducts = await searchRainforest(query);
+        if (rainforestProducts.length > 0) {
+          allProducts.push(...rainforestProducts);
+          apiSources.push('rainforest');
+          console.log(`✅ Rainforest: ${rainforestProducts.length} products`);
         }
-      });
+      } catch (error) {
+        console.log(`❌ Rainforest failed: ${error.message}`);
+      }
     }
 
     // Add local products
@@ -344,25 +255,42 @@ app.get('/api/products/search', async (req, res) => {
       }
     });
 
-    // Shuffle
+    // Shuffle for variety
     for (let i = uniqueProducts.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
     }
 
+    // PAGINATION: Calculate what to return
+    const totalProducts = uniqueProducts.length;
+    const totalPages = Math.ceil(totalProducts / limit);
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedProducts = uniqueProducts.slice(startIndex, endIndex);
+
     const sourceString = apiSources.join('+');
     
-    console.log(`🎉 FINAL: ${uniqueProducts.length} products from [${sourceString}]`);
+    console.log(`🎉 PAGINATION: Page ${page}/${totalPages}, returning ${paginatedProducts.length} of ${totalProducts} total`);
     
-    // RETURN ALL PRODUCTS - NO LIMITS
+    // Return paginated results
     res.json({
       success: true,
-      products: uniqueProducts,
+      products: paginatedProducts, // Only current page
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalProducts: totalProducts,
+        productsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+        nextPage: page < totalPages ? page + 1 : null,
+        previousPage: page > 1 ? page - 1 : null
+      },
       stats: {
-        productCount: uniqueProducts.length,
+        productCount: paginatedProducts.length,
+        totalAvailable: totalProducts,
         source: sourceString,
         rainforestCount: allProducts.filter(p => p.id?.includes('rainforest')).length,
-        geminiCount: allProducts.filter(p => p.id?.includes('gemini')).length,
         localCount: localProducts.length,
         requestId: requestId
       }
@@ -378,9 +306,9 @@ app.get('/api/products/search', async (req, res) => {
   }
 });
 
-// CHAT ENDPOINT WITH GEMINI
-app.post('/api/chat/gemini', async (req, res) => {
-  const { message, context } = req.body || {};
+// SIMPLE CHAT ENDPOINT
+app.post('/api/chat/claude', async (req, res) => {
+  const { message } = req.body || {};
   
   if (!message) {
     return res.status(400).json({ 
@@ -391,75 +319,26 @@ app.post('/api/chat/gemini', async (req, res) => {
   }
   
   try {
+    // For now, just redirect to search with pagination
     const searchQuery = message.toLowerCase().trim();
-    let allProducts = [];
-    let sources = [];
-
-    // Parallel API execution
-    const promises = [];
-
-    if (process.env.RAINFOREST_API_KEY) {
-      promises.push(
-        searchRainforest(searchQuery)
-          .then(products => ({ source: 'rainforest', products }))
-          .catch(() => ({ source: 'rainforest', products: [] }))
-      );
-    }
-
-    if (process.env.GEMINI_API_KEY) {
-      promises.push(
-        queryGemini(searchQuery, context || 'beauty')
-          .then(products => ({ source: 'gemini', products }))
-          .catch(() => ({ source: 'gemini', products: [] }))
-      );
-    }
-
-    if (promises.length > 0) {
-      const results = await Promise.all(promises);
-      results.forEach(result => {
-        if (result.products.length > 0) {
-          allProducts.push(...result.products);
-          sources.push(result.source);
-        }
-      });
-    }
-
-    // Add local products
+    
+    // Simple local search with limit
     const searchTerms = searchQuery.split(' ').filter(t => t.length > 2);
-    const localProducts = BEAUTY_PRODUCTS.filter(product => {
+    const matchingProducts = BEAUTY_PRODUCTS.filter(product => {
       return searchTerms.some(term =>
         product.name?.toLowerCase().includes(term) ||
         product.category?.toLowerCase().includes(term) ||
         product.brand?.toLowerCase().includes(term)
       ) || searchQuery === 'global';
-    });
-
-    allProducts.push(...localProducts);
-    sources.push('local');
-
-    // Deduplicate and shuffle
-    const uniqueProducts = [];
-    const seen = new Set();
-    
-    allProducts.forEach(product => {
-      const key = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueProducts.push(product);
-      }
-    });
-
-    for (let i = uniqueProducts.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
-    }
+    }).slice(0, 500); // Limit to 500 to avoid size issues
 
     res.json({
       success: true,
-      products: uniqueProducts,
+      products: matchingProducts,
       stats: {
-        productCount: uniqueProducts.length,
-        source: sources.join('+')
+        productCount: matchingProducts.length,
+        source: 'local-chat',
+        message: 'Chat endpoint with size limits to avoid response issues'
       }
     });
 
@@ -474,13 +353,10 @@ app.post('/api/chat/gemini', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`\n🚀 Beauty AI Backend (Gemini Test) running on port ${port}`);
+  console.log(`\n🚀 Beauty AI Backend (Pagination Fixed) running on port ${port}`);
   console.log(`📊 ${BEAUTY_PRODUCTS.length} local products loaded`);
   console.log(`🌧️ Rainforest API: ${process.env.RAINFOREST_API_KEY ? 'ENABLED ✅' : 'DISABLED ❌'}`);
   console.log(`💎 Gemini API: ${process.env.GEMINI_API_KEY ? 'ENABLED ✅' : 'DISABLED ❌'}`);
-  console.log(`🔍 Environment variables containing 'API' or 'KEY':`);
-  Object.keys(process.env).filter(key => key.includes('API') || key.includes('KEY')).forEach(key => {
-    console.log(`   ${key}: ${process.env[key] ? 'SET' : 'NOT SET'}`);
-  });
-  console.log();
+  console.log(`📄 Pagination: Default 500 products per page to avoid response size limits`);
+  console.log(`🔗 Use ?page=2&limit=500 for more products\n`);
 });
