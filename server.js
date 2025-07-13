@@ -188,11 +188,11 @@ app.get('/test/stats', (req, res) => {
   });
 });
 
-// MAIN SEARCH ENDPOINT WITH PAGINATION
+// MAIN SEARCH ENDPOINT WITH SMALLER PAGINATION
 app.get('/api/products/search', async (req, res) => {
   const query = req.query.q ? req.query.q.toLowerCase().trim() : 'global';
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 500; // Default 500 per page
+  const limit = Math.min(parseInt(req.query.limit) || 300, 300); // Max 300 per page
   const requestId = req.headers['x-request-id'] || Math.random().toString(36).slice(2);
   
   console.log(`\n🔍 SEARCH - Query: "${query}", Page: ${page}, Limit: ${limit}, ID: ${requestId}`);
@@ -201,14 +201,29 @@ app.get('/api/products/search', async (req, res) => {
     let allProducts = [];
     let apiSources = [];
 
-    // Get API products (limited to avoid size issues)
+    // Get Gemini products if available and not global search
+    if (process.env.GEMINI_API_KEY && query !== 'global') {
+      try {
+        console.log(`💎 Trying Gemini for: "${query}"`);
+        const geminiProducts = await queryGemini(query, 'beauty products');
+        if (geminiProducts.length > 0) {
+          allProducts.push(...geminiProducts.slice(0, 50)); // Limit Gemini to 50
+          apiSources.push('gemini');
+          console.log(`✅ Gemini: ${geminiProducts.length} products (using 50)`);
+        }
+      } catch (error) {
+        console.log(`❌ Gemini failed: ${error.message}`);
+      }
+    }
+
+    // Get Rainforest products if available and not global search  
     if (process.env.RAINFOREST_API_KEY && query !== 'global') {
       try {
         const rainforestProducts = await searchRainforest(query);
         if (rainforestProducts.length > 0) {
-          allProducts.push(...rainforestProducts);
+          allProducts.push(...rainforestProducts.slice(0, 50)); // Limit Rainforest to 50
           apiSources.push('rainforest');
-          console.log(`✅ Rainforest: ${rainforestProducts.length} products`);
+          console.log(`✅ Rainforest: ${rainforestProducts.length} products (using 50)`);
         }
       } catch (error) {
         console.log(`❌ Rainforest failed: ${error.message}`);
@@ -272,10 +287,20 @@ app.get('/api/products/search', async (req, res) => {
     
     console.log(`🎉 PAGINATION: Page ${page}/${totalPages}, returning ${paginatedProducts.length} of ${totalProducts} total`);
     
-    // Return paginated results
+    // Return paginated results with reduced data to minimize response size
+    const optimizedProducts = paginatedProducts.map(product => ({
+      id: product.id,
+      name: product.name.length > 60 ? product.name.substring(0, 60) + '...' : product.name,
+      brand: product.brand,
+      price: product.price,
+      description: product.description.length > 100 ? product.description.substring(0, 100) + '...' : product.description,
+      country: product.country,
+      category: product.category
+    }));
+    
     res.json({
       success: true,
-      products: paginatedProducts, // Only current page
+      products: optimizedProducts, // Optimized for size
       pagination: {
         currentPage: page,
         totalPages: totalPages,
@@ -287,9 +312,10 @@ app.get('/api/products/search', async (req, res) => {
         previousPage: page > 1 ? page - 1 : null
       },
       stats: {
-        productCount: paginatedProducts.length,
+        productCount: optimizedProducts.length,
         totalAvailable: totalProducts,
         source: sourceString,
+        geminiCount: allProducts.filter(p => p.id?.includes('gemini')).length,
         rainforestCount: allProducts.filter(p => p.id?.includes('rainforest')).length,
         localCount: localProducts.length,
         requestId: requestId
