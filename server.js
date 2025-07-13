@@ -5,7 +5,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Dataset with ~3100 products (keeping your existing dataset)
+// Dataset with ~3100 products
 const BEAUTY_PRODUCTS = [
   ...Array.from({ length: 600 }, (_, i) => ({
     name: `Anti Aging Serum ${i + 1}`,
@@ -72,13 +72,7 @@ const BEAUTY_PRODUCTS = [
   }))
 ].filter(p => p && p.name && p.category && p.brand && p.price && p.description && p.id);
 
-// Log dataset breakdown
-const categoryCounts = BEAUTY_PRODUCTS.reduce((acc, p) => {
-  acc[p.category] = (acc[p.category] || 0) + 1;
-  return acc;
-}, {});
 console.log(`BEAUTY_PRODUCTS total: ${BEAUTY_PRODUCTS.length}`);
-console.log('Category breakdown:', JSON.stringify(categoryCounts));
 
 // Query alias mapping
 const QUERY_ALIASES = {
@@ -87,54 +81,36 @@ const QUERY_ALIASES = {
   'kbeauty': ['k-beauty'],
   'eyecare': ['eye care'],
   'lipproducts': ['lip products'],
-  'haircare': [],
-  'tools': [],
   'natural': ['global', 'k-beauty'],
   'organic': ['global', 'k-beauty']
 };
 
-// UPDATED CORS - Allow more origins including localhost and file:// 
+// CORS with broad permissions
 app.use(cors({
-  origin: [
-    'https://beauty-static-live.onrender.com', 
-    'https://beautystatic.onrender.com',
-    'http://localhost:3000',
-    'http://localhost:3001', 
-    'http://localhost:8080',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5500', // Live Server default
-    'null' // For file:// URLs
-  ],
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Accept', 'X-Request-ID']
+  origin: true, // Allow all origins for testing
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept', 'X-Request-ID', 'Authorization'],
+  credentials: false
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ENHANCED Rainforest API search - try multiple searches for more results
+// Enhanced Rainforest API search
 async function searchRainforest(query) {
   try {
-    const searchTerms = [query];
+    console.log(`🌧️ Rainforest searching for: "${query}"`);
     
-    // Add related search terms for broader results
-    if (query.includes('beauty') || query === 'global') {
-      searchTerms.push('skincare', 'makeup', 'cosmetics', 'beauty products');
-    }
-    if (query.includes('k-beauty')) {
-      searchTerms.push('korean skincare', 'k beauty', 'korean cosmetics');
-    }
-    if (query.includes('anti-aging')) {
-      searchTerms.push('anti aging cream', 'wrinkle cream', 'retinol');
+    const searchTerms = [query];
+    if (query === 'global' || query.includes('beauty')) {
+      searchTerms.push('skincare', 'makeup', 'cosmetics');
     }
     
     let allProducts = [];
     
-    // Search with multiple terms to get more results
-    for (const term of searchTerms.slice(0, 3)) { // Limit to 3 searches to avoid rate limits
+    for (const term of searchTerms.slice(0, 2)) {
       try {
-        console.log(`Searching Rainforest for: ${term}`);
         const response = await axios.get('https://api.rainforestapi.com/request', {
           params: {
             api_key: process.env.RAINFOREST_API_KEY,
@@ -142,104 +118,96 @@ async function searchRainforest(query) {
             amazon_domain: 'amazon.com',
             search_term: term,
             category_id: 'beauty',
-            max_page: 3 // Get more pages for more products
+            max_page: 2
           },
-          timeout: 8000
+          timeout: 10000
         });
         
         if (response.data.search_results) {
-          const products = response.data.search_results.map(item => ({
-            id: item.asin || `rainforest-${Math.random().toString(36).slice(2)}`,
-            name: item.title || 'Unknown Product',
-            brand: item.brand || 'Unknown Brand',
-            price: parseFloat(item.price?.value || (Math.random() * 50 + 10)),
-            description: item.description || item.title || 'High-quality beauty product',
+          const products = response.data.search_results.map((item, index) => ({
+            id: item.asin || `rainforest-${term}-${index}`,
+            name: item.title || `Beauty Product ${index + 1}`,
+            brand: item.brand || 'Premium Beauty',
+            price: parseFloat(item.price?.value) || (Math.random() * 50 + 10),
+            description: item.description || item.title || 'High-quality beauty product from Amazon',
             country: 'USA',
             category: 'beauty'
           }));
           
           allProducts.push(...products);
-          console.log(`Found ${products.length} products for term: ${term}`);
+          console.log(`🌧️ Rainforest found ${products.length} for "${term}"`);
         }
       } catch (termError) {
-        console.error(`Rainforest search failed for term "${term}":`, termError.message);
+        console.error(`Rainforest term "${term}" failed:`, termError.message);
       }
     }
     
-    // Remove duplicates by ID
-    const uniqueProducts = allProducts.filter((product, index, self) => 
-      index === self.findIndex(p => p.id === product.id)
-    );
-    
-    console.log(`Total unique Rainforest products: ${uniqueProducts.length}`);
-    return uniqueProducts;
+    console.log(`🌧️ Rainforest total: ${allProducts.length} products`);
+    return allProducts;
     
   } catch (error) {
-    console.error('Rainforest API error:', error.message);
+    console.error('🌧️ Rainforest API error:', error.message);
     return [];
   }
 }
 
-// Query Claude - Enhanced to generate more diverse products
+// Enhanced Claude API search
 async function queryClaude(query, context) {
   try {
+    console.log(`🤖 Claude searching for: "${query}"`);
+    
     const response = await anthropic.messages.create({
       model: 'claude-3-opus-20240229',
-      max_tokens: 2000, // Increased for more products
+      max_tokens: 3000,
       messages: [{
         role: 'user',
-        content: `Create a diverse list of 20-50 beauty products related to "${query}" in the context of ${context}. 
+        content: `Generate 30-50 diverse beauty products for the search term "${query}".
 
-Include products from different countries (USA, South Korea, Japan, France, Germany, UK, Australia, Brazil, etc.) and various price ranges ($5-$200).
+Include products from various countries: USA, South Korea, Japan, France, Germany, UK, Australia, Canada, Brazil, India, Italy.
 
-For each product, provide:
-- Unique product name
-- Brand name  
-- Realistic price (number only, no currency symbol)
-- Detailed description
-- Country of origin
-- Category (skincare, makeup, haircare, etc.)
-- Unique ID starting with "claude-"
+Each product should have:
+- id: "claude-[unique-id]"
+- name: realistic product name
+- brand: realistic brand name
+- price: number between 5 and 200
+- description: detailed description
+- country: country of origin
+- category: skincare, makeup, haircare, fragrance, or beauty
 
-Format as a JSON array of objects with these exact fields: id, name, brand, price, description, country, category.
-
-Focus on real-sounding products that would actually exist for the search term "${query}".`
+Return ONLY a valid JSON array, no other text:
+[{"id":"claude-1","name":"...","brand":"...","price":25.99,"description":"...","country":"USA","category":"skincare"}]`
       }]
     });
     
     const responseText = response.content[0].text || '[]';
-    console.log('Claude raw response length:', responseText.length);
     
-    // Try to extract JSON from the response
-    let jsonMatch = responseText.match(/\[.*\]/s);
-    if (!jsonMatch) {
-      // Try to find JSON with brackets
-      jsonMatch = responseText.match(/```json\s*(\[.*\])\s*```/s);
-      if (jsonMatch) {
-        jsonMatch = [jsonMatch[1]];
-      }
+    // Extract JSON from response
+    let jsonData = responseText;
+    
+    // Remove markdown code blocks if present
+    jsonData = jsonData.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    
+    // Find array in the text
+    const arrayMatch = jsonData.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      jsonData = arrayMatch[0];
     }
     
-    if (jsonMatch) {
-      const products = JSON.parse(jsonMatch[0]);
-      console.log(`Claude generated ${products.length} products`);
-      
-      // Ensure all products have claude- prefix and proper structure
-      return products.map((product, index) => ({
-        id: product.id || `claude-${query}-${index + 1}`,
-        name: product.name || `Beauty Product ${index + 1}`,
-        brand: product.brand || 'Premium Beauty',
-        price: Number(product.price) || (Math.random() * 100 + 10),
-        description: product.description || `High-quality beauty product for ${query}`,
-        country: product.country || 'Global',
-        category: product.category || 'beauty'
-      })).filter(p => p.name && p.brand); // Filter out incomplete products
-    }
+    const products = JSON.parse(jsonData);
+    console.log(`🤖 Claude generated ${products.length} products`);
     
-    console.log('Claude: Could not parse JSON from response');
-    return [];
+    return products.map((product, index) => ({
+      id: product.id || `claude-${query}-${index}`,
+      name: product.name || `Beauty Product ${index + 1}`,
+      brand: product.brand || 'Premium Beauty',
+      price: Number(product.price) || (Math.random() * 100 + 15),
+      description: product.description || `High-quality beauty product for ${query}`,
+      country: product.country || 'Global',
+      category: product.category || 'beauty'
+    }));
+    
   } catch (error) {
-    console.error('Claude API error:', error.message);
+    console.error('🤖 Claude API error:', error.message);
     return [];
   }
 }
@@ -247,8 +215,9 @@ Focus on real-sounding products that would actually exist for the search term "$
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Welcome to Luminous AI Backend',
-    endpoints: ['/health', '/api/products/search', '/api/chat/claude']
+    message: 'Beauty AI Backend - No Limits Edition',
+    endpoints: ['/health', '/api/products/search', '/api/chat/claude'],
+    totalProducts: BEAUTY_PRODUCTS.length
   });
 });
 
@@ -256,232 +225,93 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     productsCount: BEAUTY_PRODUCTS.length,
-    categoryBreakdown: categoryCounts,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    version: 'no-limits'
   });
 });
 
-// UPDATED SEARCH ENDPOINT - Use both APIs simultaneously for maximum coverage
+// SEARCH ENDPOINT - ABSOLUTELY NO LIMITS
 app.get('/api/products/search', async (req, res) => {
-  const query = req.query.q ? req.query.q.toLowerCase().replace(/[^a-z0-9\s-]/g, '') : '';
-  const requestId = req.headers['x-request-id'] || 'unknown';
-  console.log(`Search query: "${query}", requestID: ${requestId}`);
+  const query = req.query.q ? req.query.q.toLowerCase().trim() : 'global';
+  const requestId = req.headers['x-request-id'] || Math.random().toString(36);
+  
+  console.log(`\n🔍 SEARCH START - Query: "${query}", ID: ${requestId}`);
   
   try {
     let allProducts = [];
-    let sources = [];
+    let apiSources = [];
 
-    // PARALLEL EXECUTION - Run both APIs simultaneously for speed
+    // Run both APIs in parallel
     const apiPromises = [];
 
-    // Add Rainforest API promise
-    if (process.env.RAINFOREST_API_KEY && query && query !== '') {
-      console.log('Launching Rainforest API search...');
+    if (process.env.RAINFOREST_API_KEY && query !== 'global') {
       apiPromises.push(
         searchRainforest(query)
           .then(products => ({ source: 'rainforest', products }))
-          .catch(error => {
-            console.error('Rainforest failed:', error.message);
-            return { source: 'rainforest', products: [] };
-          })
+          .catch(error => ({ source: 'rainforest', products: [], error: error.message }))
       );
     }
 
-    // Add Claude API promise
-    if (process.env.ANTHROPIC_API_KEY && query && query !== '') {
-      console.log('Launching Claude API search...');
+    if (process.env.ANTHROPIC_API_KEY && query !== 'global') {
       apiPromises.push(
-        queryClaude(query, 'beauty products worldwide')
+        queryClaude(query, 'beauty products')
           .then(products => ({ source: 'claude', products }))
-          .catch(error => {
-            console.error('Claude failed:', error.message);
-            return { source: 'claude', products: [] };
-          })
+          .catch(error => ({ source: 'claude', products: [], error: error.message }))
       );
     }
 
-    // Execute both APIs in parallel
+    // Execute APIs in parallel
     if (apiPromises.length > 0) {
-      const apiResults = await Promise.all(apiPromises);
+      console.log(`🚀 Launching ${apiPromises.length} API calls in parallel...`);
+      const results = await Promise.all(apiPromises);
       
-      apiResults.forEach(result => {
+      results.forEach(result => {
         if (result.products.length > 0) {
           allProducts.push(...result.products);
-          sources.push(result.source);
-          console.log(`✅ ${result.source} returned ${result.products.length} products`);
+          apiSources.push(result.source);
+          console.log(`✅ ${result.source}: ${result.products.length} products`);
+        } else if (result.error) {
+          console.log(`❌ ${result.source}: ${result.error}`);
         }
       });
     }
 
-    // Always supplement with local products for comprehensive coverage
-    console.log('Adding local products for comprehensive coverage...');
+    // ALWAYS add local products (no limits)
+    console.log(`📚 Adding local products for "${query}"...`);
+    
     let categoriesToMatch = [query];
     if (QUERY_ALIASES[query]) {
-      categoriesToMatch = QUERY_ALIASES[query];
+      categoriesToMatch.push(...QUERY_ALIASES[query]);
     }
     
-    const localProducts = BEAUTY_PRODUCTS.filter(product =>
-      product && (
-        query === '' || query === 'global' ||
-        categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
-        product.category?.toLowerCase().includes(query) ||
-        product.name?.toLowerCase().includes(query) ||
-        product.brand?.toLowerCase().includes(query) ||
-        product.description?.toLowerCase().includes(query) ||
-        product.country?.toLowerCase().includes(query)
-      )
-    );
-    
-    allProducts.push(...localProducts);
-    sources.push('local');
-    console.log(`Added ${localProducts.length} local products`);
-
-    // Remove duplicates by name similarity (case-insensitive)
-    const uniqueProducts = [];
-    const seenNames = new Set();
-    
-    allProducts.forEach(product => {
-      const normalizedName = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!seenNames.has(normalizedName)) {
-        seenNames.add(normalizedName);
-        uniqueProducts.push(product);
-      }
-    });
-
-    // Shuffle products for variety (mix API results with local)
-    for (let i = uniqueProducts.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
-    }
-
-    const finalSource = sources.length > 1 ? sources.join('+') : sources[0] || 'local';
-    
-    console.log(`Returning ${uniqueProducts.length} total unique products for query: "${query}", sources: ${finalSource}`);
-    
-    // Return ALL products found - no limits
-    res.json({
-      success: true,
-      products: uniqueProducts,
-      stats: {
-        productCount: uniqueProducts.length,
-        source: finalSource,
-        rainforestCount: allProducts.filter(p => p.country === 'USA' && !p.id.includes('antiaging')).length,
-        claudeCount: allProducts.filter(p => p.id && p.id.includes('claude')).length,
-        localCount: localProducts.length,
-        sourceBreakdown: sources
-      }
-    });
-  } catch (error) {
-    console.error(`Search error: ${error.message}, requestID: ${requestId}`);
-    res.status(500).json({
-      success: false,
-      products: [],
-      stats: { productCount: 0, source: 'error' }
-    });
-  }
-});
-
-// UPDATED CHAT ENDPOINT - Use both APIs simultaneously
-app.post('/api/chat/claude', async (req, res) => {
-  const { message, context } = req.body || {};
-  const requestId = req.headers['x-request-id'] || 'unknown';
-  console.log(`Chat query: "${message}", Context: ${context}, requestID: ${requestId}`);
-  
-  if (!message || !context) {
-    return res.status(400).json({ success: false, products: [], error: 'Missing message or context' });
-  }
-  
-  try {
-    const timeout = setTimeout(() => {
-      console.error(`Chat request timeout for query: ${message}, requestID: ${requestId}`);
-      res.status(503).json({ success: false, products: [], error: 'Request timeout' });
-    }, 20000); // Increased timeout for parallel API calls
-
-    let allProducts = [];
-    let sources = [];
-    let searchQuery = message.toLowerCase().replace(/[^a-z0-9\s-]/g, '');
-
-    // PARALLEL EXECUTION - Run both APIs simultaneously
-    const apiPromises = [];
-
-    // Add Rainforest API promise
-    if (process.env.RAINFOREST_API_KEY && searchQuery) {
-      console.log('Chat: Launching Rainforest API search...');
-      apiPromises.push(
-        searchRainforest(searchQuery)
-          .then(products => ({ source: 'rainforest', products }))
-          .catch(error => {
-            console.error('Chat Rainforest failed:', error.message);
-            return { source: 'rainforest', products: [] };
-          })
-      );
-    }
-
-    // Add Claude API promise
-    if (process.env.ANTHROPIC_API_KEY && searchQuery) {
-      console.log('Chat: Launching Claude API search...');
-      apiPromises.push(
-        queryClaude(searchQuery, context)
-          .then(products => ({ source: 'claude', products }))
-          .catch(error => {
-            console.error('Chat Claude failed:', error.message);
-            return { source: 'claude', products: [] };
-          })
-      );
-    }
-
-    // Execute both APIs in parallel
-    if (apiPromises.length > 0) {
-      const apiResults = await Promise.all(apiPromises);
+    const localProducts = BEAUTY_PRODUCTS.filter(product => {
+      if (!product) return false;
       
-      apiResults.forEach(result => {
-        if (result.products.length > 0) {
-          allProducts.push(...result.products);
-          sources.push(result.source);
-          console.log(`✅ Chat ${result.source} returned ${result.products.length} products`);
-        }
-      });
-    }
-
-    // Always add local products for comprehensive coverage
-    console.log('Chat: Adding local products...');
-    let categoriesToMatch = [];
-    const queryTerms = searchQuery.split(' ').filter(term => term);
-    queryTerms.forEach(term => {
-      if (QUERY_ALIASES[term]) {
-        categoriesToMatch.push(...QUERY_ALIASES[term]);
-      } else {
-        categoriesToMatch.push(term);
-      }
-    });
-    categoriesToMatch = [...new Set(categoriesToMatch)];
-    
-    const localProducts = BEAUTY_PRODUCTS.filter(product =>
-      product && (
-        queryTerms.includes('global') ||
-        categoriesToMatch.some(cat => product.category?.toLowerCase() === cat) ||
-        queryTerms.some(term =>
+      const searchTerms = query.split(' ');
+      
+      return query === 'global' ||
+        categoriesToMatch.some(cat => product.category?.toLowerCase().includes(cat)) ||
+        searchTerms.some(term => 
           product.category?.toLowerCase().includes(term) ||
           product.name?.toLowerCase().includes(term) ||
           product.brand?.toLowerCase().includes(term) ||
           product.description?.toLowerCase().includes(term) ||
           product.country?.toLowerCase().includes(term)
-        )
-      )
-    );
+        );
+    });
     
     allProducts.push(...localProducts);
-    sources.push('local');
-    console.log(`Chat: Added ${localProducts.length} local products`);
+    apiSources.push('local');
+    console.log(`📚 Local: ${localProducts.length} products`);
 
-    // Remove duplicates by name similarity
+    // Remove duplicates by name (case-insensitive)
     const uniqueProducts = [];
     const seenNames = new Set();
     
     allProducts.forEach(product => {
-      const normalizedName = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!seenNames.has(normalizedName)) {
-        seenNames.add(normalizedName);
+      const key = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
         uniqueProducts.push(product);
       }
     });
@@ -492,28 +322,143 @@ app.post('/api/chat/claude', async (req, res) => {
       [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
     }
 
-    const finalSource = sources.length > 1 ? sources.join('+') : sources[0] || 'local';
-
-    clearTimeout(timeout);
-    console.log(`Chat: Returning ${uniqueProducts.length} products for query: "${message}", sources: ${finalSource}`);
+    const sourceString = apiSources.join('+');
     
-    // Return ALL products - no limits
+    console.log(`🎉 FINAL RESULT: ${uniqueProducts.length} unique products from [${sourceString}]`);
+    console.log(`🔍 SEARCH COMPLETE - ID: ${requestId}\n`);
+    
+    // CRITICAL: Return ALL products with NO limits
     res.json({
       success: true,
-      products: uniqueProducts,
+      products: uniqueProducts, // ← NO .slice() or limits here!
       stats: {
         productCount: uniqueProducts.length,
-        source: finalSource,
-        sourceBreakdown: sources
+        source: sourceString,
+        totalBeforeDedup: allProducts.length,
+        rainforestCount: allProducts.filter(p => p.id?.includes('rainforest')).length,
+        claudeCount: allProducts.filter(p => p.id?.includes('claude')).length,
+        localCount: localProducts.length,
+        requestId: requestId
       }
     });
+    
   } catch (error) {
-    clearTimeout(timeout);
-    console.error(`Chat error: ${error.message}, requestID: ${requestId}`);
-    res.status(500).json({ success: false, products: [], error: 'Failed to process chat request' });
+    console.error(`❌ Search error for "${query}":`, error.message);
+    res.status(500).json({
+      success: false,
+      products: [],
+      error: error.message,
+      stats: { productCount: 0, source: 'error' }
+    });
+  }
+});
+
+// CHAT ENDPOINT - ALSO NO LIMITS
+app.post('/api/chat/claude', async (req, res) => {
+  const { message, context } = req.body || {};
+  const requestId = req.headers['x-request-id'] || Math.random().toString(36);
+  
+  console.log(`\n💬 CHAT START - Message: "${message}", ID: ${requestId}`);
+  
+  if (!message) {
+    return res.status(400).json({ 
+      success: false, 
+      products: [], 
+      error: 'Message is required' 
+    });
+  }
+  
+  try {
+    const searchQuery = message.toLowerCase().trim();
+    let allProducts = [];
+    let sources = [];
+
+    // Parallel API execution
+    const promises = [];
+
+    if (process.env.RAINFOREST_API_KEY) {
+      promises.push(
+        searchRainforest(searchQuery)
+          .then(products => ({ source: 'rainforest', products }))
+          .catch(() => ({ source: 'rainforest', products: [] }))
+      );
+    }
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      promises.push(
+        queryClaude(searchQuery, context || 'beauty')
+          .then(products => ({ source: 'claude', products }))
+          .catch(() => ({ source: 'claude', products: [] }))
+      );
+    }
+
+    const results = await Promise.all(promises);
+    results.forEach(result => {
+      if (result.products.length > 0) {
+        allProducts.push(...result.products);
+        sources.push(result.source);
+        console.log(`💬 ${result.source}: ${result.products.length} products`);
+      }
+    });
+
+    // Add local products
+    const searchTerms = searchQuery.split(' ').filter(t => t.length > 2);
+    const localProducts = BEAUTY_PRODUCTS.filter(product => {
+      return searchTerms.some(term =>
+        product.name?.toLowerCase().includes(term) ||
+        product.category?.toLowerCase().includes(term) ||
+        product.brand?.toLowerCase().includes(term) ||
+        product.description?.toLowerCase().includes(term)
+      ) || searchQuery === 'global';
+    });
+
+    allProducts.push(...localProducts);
+    sources.push('local');
+
+    // Deduplicate and shuffle
+    const uniqueProducts = [];
+    const seen = new Set();
+    
+    allProducts.forEach(product => {
+      const key = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueProducts.push(product);
+      }
+    });
+
+    // Shuffle
+    for (let i = uniqueProducts.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueProducts[i], uniqueProducts[j]] = [uniqueProducts[j], uniqueProducts[i]];
+    }
+
+    console.log(`💬 CHAT RESULT: ${uniqueProducts.length} products from [${sources.join('+')}]`);
+    
+    // Return ALL products - NO LIMITS
+    res.json({
+      success: true,
+      products: uniqueProducts, // ← NO limits!
+      stats: {
+        productCount: uniqueProducts.length,
+        source: sources.join('+'),
+        requestId: requestId
+      }
+    });
+
+  } catch (error) {
+    console.error(`💬 Chat error:`, error.message);
+    res.status(500).json({
+      success: false,
+      products: [],
+      error: error.message
+    });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`\n🚀 Beauty AI Backend (No Limits) running on port ${port}`);
+  console.log(`📊 ${BEAUTY_PRODUCTS.length} local products loaded`);
+  console.log(`🌧️ Rainforest API: ${process.env.RAINFOREST_API_KEY ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`🤖 Claude API: ${process.env.ANTHROPIC_API_KEY ? 'ENABLED' : 'DISABLED'}\n`);
 });
