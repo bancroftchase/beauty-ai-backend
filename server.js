@@ -9,23 +9,24 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Logging middleware
+// ✅ Logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// ✅ Client IP route
+// ✅ Route: Get Client IP
 app.get('/clientIP', (req, res) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   res.json({ ip });
 });
 
-// ✅ Gemini AI Chat Endpoint
+// ✅ Route: Talk to Gemini
 app.post('/ask-gemini', async (req, res) => {
   const { prompt } = req.body;
-  if (!prompt) {
-    return res.status(400).json({ error: 'Prompt required' });
+
+  if (!prompt || typeof prompt !== 'string') {
+    return res.status(400).json({ error: 'Prompt is required.' });
   }
 
   try {
@@ -43,17 +44,17 @@ app.post('/ask-gemini', async (req, res) => {
     const reply = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     res.json({ reply });
   } catch (error) {
-    console.error('Gemini API Error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Gemini API failed' });
+    console.error('Gemini API error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Gemini API call failed.' });
   }
 });
 
-// ✅ 404 fallback (this must be LAST)
+// ✅ Catch-all for unknown routes (must be LAST)
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// ✅ Start server
+// ✅ Start the server
 app.listen(PORT, () => {
   console.log(`✅ Beauty AI Backend running on port ${PORT}`);
 });
