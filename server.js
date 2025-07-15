@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-require('dotenv').config(); // Optional: for .env support
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -10,24 +9,21 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// Logger (Optional)
+// Logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// === ROUTES ===
-
-// ✅ Test: Get Client IP
+// ✅ Client IP route
 app.get('/clientIP', (req, res) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   res.json({ ip });
 });
 
-// ✅ Gemini Proxy Route (scaffold)
+// ✅ Gemini AI route
 app.post('/ask-gemini', async (req, res) => {
   const { prompt } = req.body;
-
   if (!prompt) return res.status(400).json({ error: 'Prompt required' });
 
   try {
@@ -44,18 +40,17 @@ app.post('/ask-gemini', async (req, res) => {
 
     const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     res.json({ reply: text });
-  } catch (error) {
-    console.error('Gemini API Error:', error.response?.data || error.message);
+  } catch (err) {
+    console.error('Gemini error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Gemini API failed' });
   }
 });
 
-// Fallback route
+// 404 fallback
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// Start Server
 app.listen(PORT, () => {
   console.log(`✅ Beauty AI Backend running on port ${PORT}`);
 });
