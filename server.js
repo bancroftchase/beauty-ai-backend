@@ -14,11 +14,11 @@ app.use(express.json());
 
 // Mock product data (replace with your 3,100 products or Firestore integration)
 const products = [
-    { id: 1, name: 'Mexican Aloe Vera Gel', region: 'Mexico', price: '$25 USD' },
-    { id: 2, name: 'French Rose Serum', region: 'France', price: '€45' },
-    { id: 3, name: 'German Vitamin C Cream', region: 'Germany', price: '€35' },
-    { id: 4, name: 'Chinese Ginseng Mask', region: 'China', price: '¥180' }
-    // Add more products as needed
+    { id: 1, name: 'Mexican Aloe Vera Gel', region: 'Mexico', price: '$25 USD', category: 'Skincare' },
+    { id: 2, name: 'French Rose Serum', region: 'France', price: '€45', category: 'Skincare' },
+    { id: 3, name: 'German Vitamin C Cream', region: 'Germany', price: '€35', category: 'Skincare' },
+    { id: 4, name: 'Chinese Ginseng Mask', region: 'China', price: '¥180', category: 'Skincare' },
+    // Add more products (up to 3,100)
 ];
 
 // Health check endpoint
@@ -48,7 +48,7 @@ app.post('/api/chat', async (req, res) => {
         );
         const reply = response.data.candidates[0].content.parts[0].text;
 
-        // Optional: Filter products if the prompt asks for recommendations
+        // Optional: Include product recommendations with pagination
         let productRecommendations = [];
         if (message.toLowerCase().includes('recommend')) {
             const page = parseInt(req.query.page) || 1;
@@ -56,11 +56,12 @@ app.post('/api/chat', async (req, res) => {
             const startIndex = (page - 1) * limit;
             const endIndex = startIndex + limit;
 
-            // Example: Filter products based on prompt (e.g., "K-Beauty" -> Korean products)
             if (message.toLowerCase().includes('k-beauty')) {
-                productRecommendations = products.filter(p => p.region === 'Korea').slice(startIndex, endIndex);
+                productRecommendations = products.filter(p => p.category === 'K-Beauty').slice(startIndex, endIndex);
             } else if (message.toLowerCase().includes('tanning')) {
-                productRecommendations = products.filter(p => p.region === 'South America').slice(startIndex, endIndex);
+                productRecommendations = products.filter(p => p.category === 'Tanning').slice(startIndex, endIndex);
+            } else if (message.toLowerCase().includes('eye care') || message.toLowerCase().includes('eyelash')) {
+                productRecommendations = products.filter(p => p.category === 'Eye Care').slice(startIndex, endIndex);
             } else {
                 productRecommendations = products.slice(startIndex, endIndex);
             }
@@ -73,7 +74,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Product catalog endpoint (optional, for reference)
+// Product catalog endpoint
 app.get('/api/products', (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 500;
