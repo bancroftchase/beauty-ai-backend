@@ -5,7 +5,6 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -21,8 +20,8 @@ app.get('/clientIP', (req, res) => {
   res.json({ ip });
 });
 
-// ✅ Route: Talk to Gemini (with RainForest fallback)
-app.post('/ask-gemini', async (req, res) => {
+// ✅ Route: AI Chat (OpenAI)
+app.post('/ask-openai', async (req, res) => {
   const { prompt } = req.body;
 
   if (!prompt || typeof prompt !== 'string') {
@@ -30,54 +29,60 @@ app.post('/ask-gemini', async (req, res) => {
   }
 
   try {
-    // ✅ Primary: Gemini API
-    const geminiResponse = await axios.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+    const openAIResponse = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
       {
-        contents: [{ parts: [{ text: prompt }] }]
+        model: 'gpt-4o', // You can change to 'gpt-4' or 'gpt-3.5-turbo'
+        messages: [{ role: 'user', content: prompt }]
       },
       {
-        params: { key: process.env.GEMINI_API_KEY },
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
       }
     );
 
-    const reply = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (reply && reply.trim() !== '') {
-      console.log('✅ Gemini response successful');
-      return res.json({ reply });
-    }
-
-    console.warn('⚠ Gemini returned empty response. Attempting RainForest fallback...');
-
-    // ✅ Fallback: RainForest API for product suggestions
-    const rainforestResponse = await axios.get('https://api.rainforestapi.com/request', {
-      params: {
-        api_key: process.env.RAINFOREST_API_KEY,
-        type: 'search',
-        search_term: prompt
-      }
-    });
-
-    const fallbackText =
-      rainforestResponse.data?.search_results?.[0]?.title ||
-      'I couldn’t get an AI response, but I found some product suggestions for you!';
-
-    return res.json({ reply: fallbackText });
-
+    const reply = openAIResponse.data.choices[0]?.message?.content || '🤖 No response generated.';
+    res.json({ reply });
   } catch (error) {
-    console.error('❌ API Error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Both Gemini and fallback failed.' });
+    console.error('OpenAI API error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'OpenAI API call failed.' });
   }
 });
 
-// ✅ Catch-all for unknown routes (must be LAST)
+// ✅ Route: Rainforest API for Product Search
+app.post('/product-search', async (req, res) => {
+  const { query } = req.body;
+
+  if (!query) {
+    return res.status(400).json({ error: 'Search query is required.' });
+  }
+
+  try {
+    const response = await axios.get('https://api.rainforestapi.com/request', {
+      params: {
+        api_key: process.env.RAINFOREST_API_KEY,
+        type: 'search',
+        amazon_domain: 'amazon.com',
+        search_term: query
+      }
+    });
+
+    const products = response.data.search_results || [];
+    res.json({ products });
+  } catch (error) {
+    console.error('Rainforest API error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Rainforest API call failed.' });
+  }
+});
+
+// ✅ Catch-all for unknown routes
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// ✅ Start the server
+// ✅ Start Server
 app.listen(PORT, () => {
   console.log(`✅ Beauty AI Backend running on port ${PORT}`);
 });
