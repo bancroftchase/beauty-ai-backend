@@ -8,18 +8,18 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Initialize Anthropic client
+// ✅ Initialize Anthropic Client
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-// ✅ Check Environment Key
+// ✅ Health Check
 app.get('/check-env', (req, res) => {
-  const anthKeyExists = !!process.env.ANTHROPIC_API_KEY;
-  res.json({ ANTHROPIC_API_KEY: anthKeyExists ? '✅ Set' : '❌ Missing' });
+  const keyStatus = process.env.ANTHROPIC_API_KEY ? '✅ Set' : '❌ Missing';
+  res.json({ ANTHROPIC_API_KEY: keyStatus });
 });
 
-// ✅ Claude Chat Endpoint
+// ✅ AI Chat Endpoint
 app.post('/ask-claude', async (req, res) => {
   const { prompt } = req.body;
 
@@ -29,7 +29,7 @@ app.post('/ask-claude', async (req, res) => {
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229', // Claude Sonnet
+      model: 'claude-3-sonnet-20240229', // Claude Sonnet Model
       max_tokens: 500,
       messages: [{ role: 'user', content: prompt }]
     });
@@ -42,7 +42,7 @@ app.post('/ask-claude', async (req, res) => {
   }
 });
 
-// ✅ Catch-all
+// ✅ Fallback for unknown routes
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
