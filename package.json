@@ -1,7 +1,6 @@
 {
   "name": "beauty-ai-backend",
   "version": "1.0.0",
-  "description": "Beauty AI Backend using Claude Sonnet",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
