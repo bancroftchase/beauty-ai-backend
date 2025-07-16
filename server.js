@@ -50,3 +50,4 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Beauty AI Backend running on port ${PORT}`);
 });
+
