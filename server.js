@@ -14,14 +14,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Test Route: Check Environment Variables
+// ✅ Test Route: Check OpenAI Key
 app.get('/check-env', (req, res) => {
   const openAIKeyExists = !!process.env.OPENAI_API_KEY;
-  const rainforestKeyExists = !!process.env.RAINFOREST_API_KEY;
-
   res.json({
-    OPENAI_API_KEY: openAIKeyExists ? '✅ Set' : '❌ Missing',
-    RAINFOREST_API_KEY: rainforestKeyExists ? '✅ Set' : '❌ Missing'
+    OPENAI_API_KEY: openAIKeyExists ? '✅ Set' : '❌ Missing'
   });
 });
 
@@ -37,7 +34,7 @@ app.post('/ask-openai', async (req, res) => {
     const openAIResponse = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o', // or gpt-4, gpt-3.5-turbo
+        model: 'gpt-4o', // or 'gpt-4' or 'gpt-3.5-turbo'
         messages: [{ role: 'user', content: prompt }]
       },
       {
@@ -53,29 +50,6 @@ app.post('/ask-openai', async (req, res) => {
   } catch (error) {
     console.error('OpenAI API error:', error.response?.data || error.message);
     res.status(500).json({ error: 'OpenAI API call failed.' });
-  }
-});
-
-// ✅ Rainforest Product Search
-app.post('/product-search', async (req, res) => {
-  const { query } = req.body;
-  if (!query) return res.status(400).json({ error: 'Search query is required.' });
-
-  try {
-    const response = await axios.get('https://api.rainforestapi.com/request', {
-      params: {
-        api_key: process.env.RAINFOREST_API_KEY,
-        type: 'search',
-        amazon_domain: 'amazon.com',
-        search_term: query
-      }
-    });
-
-    const products = response.data.search_results || [];
-    res.json({ products });
-  } catch (error) {
-    console.error('Rainforest API error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Rainforest API call failed.' });
   }
 });
 
