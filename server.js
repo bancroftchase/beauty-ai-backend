@@ -14,10 +14,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Route: Get Client IP
-app.get('/clientIP', (req, res) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  res.json({ ip });
+// ✅ Test Route: Check Environment Variables
+app.get('/check-env', (req, res) => {
+  const openAIKeyExists = !!process.env.OPENAI_API_KEY;
+  const rainforestKeyExists = !!process.env.RAINFOREST_API_KEY;
+
+  res.json({
+    OPENAI_API_KEY: openAIKeyExists ? '✅ Set' : '❌ Missing',
+    RAINFOREST_API_KEY: rainforestKeyExists ? '✅ Set' : '❌ Missing'
+  });
 });
 
 // ✅ Route: AI Chat (OpenAI)
@@ -32,7 +37,7 @@ app.post('/ask-openai', async (req, res) => {
     const openAIResponse = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o', // You can change to 'gpt-4' or 'gpt-3.5-turbo'
+        model: 'gpt-4o', // or gpt-4, gpt-3.5-turbo
         messages: [{ role: 'user', content: prompt }]
       },
       {
@@ -51,13 +56,10 @@ app.post('/ask-openai', async (req, res) => {
   }
 });
 
-// ✅ Route: Rainforest API for Product Search
+// ✅ Rainforest Product Search
 app.post('/product-search', async (req, res) => {
   const { query } = req.body;
-
-  if (!query) {
-    return res.status(400).json({ error: 'Search query is required.' });
-  }
+  if (!query) return res.status(400).json({ error: 'Search query is required.' });
 
   try {
     const response = await axios.get('https://api.rainforestapi.com/request', {
@@ -82,7 +84,6 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// ✅ Start Server
 app.listen(PORT, () => {
   console.log(`✅ Beauty AI Backend running on port ${PORT}`);
 });
