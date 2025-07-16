@@ -1,62 +1,74 @@
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const { Anthropic } = require('@anthropic-ai/sdk');
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-require('dotenv').config();
+dotenv.config();
 
 const app = express();
+app.use(cors());
+app.use(express.json());
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
 const PORT = process.env.PORT || 10000;
 
-app.use(cors());
-app.use(bodyParser.json());
+// ✅ Primary route: Ask AI
+app.post("/ask-ai", async (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: "Query is required" });
 
-const anthropic = new Anthropic({
-    apiKey: process.env.CLAUDE_API_KEY
-});
+  try {
+    // ✅ Try Claude first
+    const claudeResponse = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-latest",
+      max_tokens: 300,
+      messages: [{ role: "user", content: `Recommend 5 beauty products for: ${query}. Format: JSON with name, price, description.` }]
+    });
 
-// ✅ Mock Product Generator
-function getMockProducts(category) {
-    const mockDB = {
-        "Global Beauty": [
-            { name: "French Luxury Serum", price: "$120", description: "High-end anti-aging serum from France." },
-            { name: "Korean Snail Cream", price: "$35", description: "Hydrating cream with snail mucin." },
-            { name: "Brazilian Hair Oil", price: "$25", description: "Smooth and strengthen your hair naturally." }
-        ],
-        "K-Beauty": [
-            { name: "Laneige Water Sleeping Mask", price: "$32", description: "Overnight hydration for glowing skin." },
-            { name: "Cosrx Snail Essence", price: "$18", description: "Repair and rejuvenate with snail extract." }
-        ],
-        "Natural Beauty": [
-            { name: "Organic Aloe Gel", price: "$10", description: "Pure aloe vera gel for skin soothing." },
-            { name: "Botanical Facial Oil", price: "$22", description: "Nourishing oil with natural botanicals." }
-        ]
-    };
-    return mockDB[category] || [];
-}
+    const aiText = claudeResponse.content[0]?.text || "";
+    const products = extractProducts(aiText);
 
-// ✅ Claude-powered AI + Mock Products
-app.post('/ask-claude', async (req, res) => {
-    const { category } = req.body;
-    if (!category) return res.status(400).json({ error: 'Category is required' });
+    if (products.length) {
+      return res.json({ reply: aiText, products });
+    }
+
+    throw new Error("Claude returned no products");
+  } catch (err) {
+    console.error("Claude failed, switching to OpenAI:", err.message);
 
     try {
-        const response = await anthropic.messages.create({
-            model: "claude-3-sonnet-20240229",
-            max_tokens: 250,
-            messages: [{ role: "user", content: `Give a short intro about ${category} beauty products.` }]
-        });
+      // ✅ Fallback to OpenAI
+      const gptResponse = await openai.chat.completions.create({
+        model: "gpt-4.1",
+        messages: [
+          { role: "system", content: "You are a beauty expert AI." },
+          { role: "user", content: `Recommend 5 beauty products for: ${query}. Format: JSON with name, price, description.` }
+        ],
+        max_tokens: 300
+      });
 
-        const aiText = response.content[0]?.text || "Here are some products for you:";
-        const products = getMockProducts(category);
+      const aiText = gptResponse.choices[0].message.content;
+      const products = extractProducts(aiText);
 
-        res.json({ reply: aiText, products });
-    } catch (error) {
-        console.error('Claude API Error:', error.message);
-        res.status(500).json({ error: 'AI request failed' });
+      return res.json({ reply: aiText, products });
+    } catch (openaiErr) {
+      console.error("OpenAI fallback failed:", openaiErr.message);
+      return res.status(500).json({ error: "Both AI services failed" });
     }
+  }
 });
 
-app.listen(PORT, () => {
-    console.log(`✅ Beauty AI Backend running on port ${PORT}`);
-});
+// ✅ Utility: Extract JSON safely
+function extractProducts(text) {
+  try {
+    const match = text.match(/\[.*\]/s);
+    return match ? JSON.parse(match[0]) : [];
+  } catch {
+    return [];
+  }
+}
+
+app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
