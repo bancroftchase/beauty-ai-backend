@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { Anthropic } = require('@anthropic-ai/sdk');
+const Anthropic = require('@anthropic-ai/sdk'); // Claude
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -9,85 +9,64 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Claude Setup
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY
+// Claude Client
+const claude = new Anthropic({
+  apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// ✅ Claude AI Endpoint
+// ✅ Claude Endpoint
 app.post('/ask-claude', async (req, res) => {
   const { category } = req.body;
-
-  if (!category) return res.status(400).json({ error: 'Category is required' });
+  if (!category) return res.status(400).json({ error: 'Category required' });
 
   try {
-    const response = await anthropic.messages.create({
+    const prompt = `Suggest 10 beauty products for category: ${category}. 
+    Return JSON array with keys: name, description, price, image.`;
+
+    const response = await claude.messages.create({
       model: 'claude-3-sonnet-20240229',
-      max_tokens: 800,
-      messages: [{
-        role: 'user',
-        content: `List 50 trending ${category} beauty products in JSON format with fields: name, description, price, image.`
-      }]
+      max_tokens: 500,
+      messages: [{ role: 'user', content: prompt }],
     });
 
-    const rawText = response.content[0]?.text || '';
-    let products = [];
-
-    // Attempt to parse JSON
-    try {
-      products = JSON.parse(rawText);
-    } catch (err) {
-      console.error('Claude JSON parse error:', err.message);
-    }
-
-    if (products.length === 0) {
-      return res.json({ source: 'claude', products: [] });
-    }
-
-    res.json({ source: 'claude', products });
+    const text = response.content[0].text;
+    const products = JSON.parse(text); // AI should return JSON
+    res.json({ products });
   } catch (error) {
-    console.error('Claude API error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Claude API call failed.' });
+    console.error('Claude API error:', error.message);
+    res.status(500).json({ error: 'Claude API failed' });
   }
 });
 
-// ✅ Rainforest Fallback
+// ✅ Rainforest Fallback Endpoint
 app.post('/fallback-products', async (req, res) => {
   const { category } = req.body;
-
-  if (!category) return res.status(400).json({ error: 'Category is required' });
-
   try {
-    const rainforestResponse = await axios.get('https://api.rainforestapi.com/request', {
+    const response = await axios.get('https://api.rainforestapi.com/request', {
       params: {
         api_key: process.env.RAINFOREST_API_KEY,
         type: 'search',
         amazon_domain: 'amazon.com',
-        search_term: category
-      }
+        search_term: category,
+      },
     });
 
-    const items = rainforestResponse.data.search_results || [];
-    const products = items.slice(0, 50).map(item => ({
+    const products = response.data.search_results.map(item => ({
       name: item.title,
-      description: 'Amazon Product',
-      price: item.price?.value ? `$${item.price.value}` : 'N/A',
-      image: item.image || 'https://via.placeholder.com/150'
+      description: item.subtitle || 'Great product',
+      price: item.price ? item.price.value : 'N/A',
+      image: item.image || '',
     }));
 
-    res.json({ source: 'rainforest', products });
+    res.json({ products });
   } catch (error) {
-    console.error('Rainforest API error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Rainforest API call failed.' });
+    console.error('Rainforest API error:', error.message);
+    res.status(500).json({ error: 'Rainforest API failed' });
   }
 });
 
-// ✅ Health Check
-app.get('/check-env', (req, res) => {
-  res.json({
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? '✅ Set' : '❌ Missing',
-    RAINFOREST_API_KEY: process.env.RAINFOREST_API_KEY ? '✅ Set' : '❌ Missing'
-  });
-});
+// ✅ Default route
+app.get('/', (req, res) => res.send('✅ Beauty AI Backend is running'));
 
-app.listen(PORT, () => console.log(`✅ Beauty AI Backend running on port ${PORT}`));
+// Start server
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
