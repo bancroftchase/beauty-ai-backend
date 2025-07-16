@@ -21,7 +21,7 @@ app.get('/clientIP', (req, res) => {
   res.json({ ip });
 });
 
-// ✅ Route: Talk to Gemini
+// ✅ Route: Talk to Gemini (with RainForest fallback)
 app.post('/ask-gemini', async (req, res) => {
   const { prompt } = req.body;
 
@@ -30,7 +30,8 @@ app.post('/ask-gemini', async (req, res) => {
   }
 
   try {
-    const response = await axios.post(
+    // ✅ Primary: Gemini API
+    const geminiResponse = await axios.post(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
       {
         contents: [{ parts: [{ text: prompt }] }]
@@ -41,11 +42,33 @@ app.post('/ask-gemini', async (req, res) => {
       }
     );
 
-    const reply = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    res.json({ reply });
+    const reply = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (reply && reply.trim() !== '') {
+      console.log('✅ Gemini response successful');
+      return res.json({ reply });
+    }
+
+    console.warn('⚠ Gemini returned empty response. Attempting RainForest fallback...');
+
+    // ✅ Fallback: RainForest API for product suggestions
+    const rainforestResponse = await axios.get('https://api.rainforestapi.com/request', {
+      params: {
+        api_key: process.env.RAINFOREST_API_KEY,
+        type: 'search',
+        search_term: prompt
+      }
+    });
+
+    const fallbackText =
+      rainforestResponse.data?.search_results?.[0]?.title ||
+      'I couldn’t get an AI response, but I found some product suggestions for you!';
+
+    return res.json({ reply: fallbackText });
+
   } catch (error) {
-    console.error('Gemini API error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Gemini API call failed.' });
+    console.error('❌ API Error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Both Gemini and fallback failed.' });
   }
 });
 
