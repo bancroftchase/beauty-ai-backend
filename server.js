@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -13,21 +12,15 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Debug API keys
+// ✅ Debug Key
 console.log("Claude Key Exists:", !!process.env.CLAUDE_API_KEY);
-console.log("OpenAI Key Exists:", !!process.env.OPENAI_API_KEY);
 
 // ✅ Claude Client
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// ✅ OpenAI Client (fallback)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// ✅ Claude Primary Route
+// ✅ Claude API Route
 app.post("/ask-claude", async (req, res) => {
   const { category } = req.body;
 
@@ -44,34 +37,29 @@ app.post("/ask-claude", async (req, res) => {
         {
           role: "user",
           content: `List 10 beauty products for ${category}. 
-          Provide JSON format: 
-          [{"name": "...", "price": "...", "description": "..."}]`,
+          Provide ONLY JSON format:
+          [{"name": "Product Name", "price": "$XX.XX", "description": "Brief description"}]`,
         },
       ],
     });
 
-    const replyText =
-      claudeResponse.content?.[0]?.text || "[]";
+    const replyText = claudeResponse.content?.[0]?.text || "[]";
 
+    // ✅ Try to parse JSON response
     const products = parseJSON(replyText);
+
     if (products.length > 0) {
       return res.json({ products });
+    } else {
+      return res.json({ products: [] });
     }
-
-    // ✅ If no products → Fallback to OpenAI
-    console.log("Claude returned empty. Falling back to OpenAI...");
-    const fallback = await getOpenAIProducts(category);
-    return res.json({ products: fallback });
   } catch (error) {
     console.error("Claude API Error:", error.response?.data || error.message);
-
-    // ✅ Fallback if Claude fails
-    const fallback = await getOpenAIProducts(category);
-    return res.json({ products: fallback });
+    return res.status(500).json({ error: "Claude API call failed." });
   }
 });
 
-// ✅ Parse JSON safely
+// ✅ JSON Parser
 function parseJSON(text) {
   try {
     return JSON.parse(text);
@@ -80,35 +68,9 @@ function parseJSON(text) {
   }
 }
 
-// ✅ OpenAI Fallback
-async function getOpenAIProducts(category) {
-  try {
-    const openaiResponse = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a beauty product assistant. Respond ONLY in JSON array format with objects like: [{\"name\":\"Product Name\",\"price\":\"$XX.XX\",\"description\":\"Brief description\"}]",
-        },
-        {
-          role: "user",
-          content: `Give me 10 beauty products for ${category}.`,
-        },
-      ],
-    });
-
-    const text = openaiResponse.choices?.[0]?.message?.content || "[]";
-    return parseJSON(text);
-  } catch (error) {
-    console.error("OpenAI fallback error:", error.message);
-    return [];
-  }
-}
-
 // ✅ Health Check
 app.get("/", (req, res) => {
-  res.send("✅ Beauty AI Backend is running");
+  res.send("✅ Beauty AI Backend (Claude Only) is running");
 });
 
 // ✅ Start Server
