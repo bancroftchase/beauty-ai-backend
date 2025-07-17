@@ -27,7 +27,19 @@ app.post("/ask-claude", async (req, res) => {
 
   try {
     const claudeResponse = await anthropic.messages.create({
-      model: "claude-3-sonnet-20240229",
+      const claudeResponse = await anthropic.messages.create({
+  model: "claude-3-5-sonnet-20241022", // ✅ latest model
+  max_tokens: 500,
+  messages: [
+    {
+      role: "user",
+      content: `List 10 beauty products for ${category}. 
+      Provide JSON format: 
+      [{"name": "...", "price": "...", "description": "..."}]`,
+    },
+  ],
+});
+
       max_tokens: 500,
       messages: [
         {
