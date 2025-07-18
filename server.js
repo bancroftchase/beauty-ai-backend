@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -12,75 +13,88 @@ app.use(cors());
 app.use(express.json());
 
 // ✅ Claude Client
-const anthropic = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY,
-});
+const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 
-// ✅ Utility: Safe JSON Parse
-function parseJSON(text) {
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    console.error("JSON parse failed:", err.message);
-    return [];
-  }
-}
+// ✅ OpenAI Client (Fallback)
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ✅ Claude API Route
+// ✅ Ask Claude (Primary) with Pagination
 app.post("/ask-claude", async (req, res) => {
-  const { category } = req.body;
+  const { category, offset = 0, count = 20 } = req.body;
 
   if (!category) {
     return res.status(400).json({ error: "Category is required" });
   }
 
   try {
-    console.log(`🔍 Requesting products for category: ${category}`);
-
     const claudeResponse = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022", // ✅ Latest Claude model
+      model: "claude-3-5-sonnet-20241022", // ✅ Correct Claude model
       max_tokens: 2000,
-      temperature: 0.7,
       messages: [
         {
           role: "user",
-          content: `
-Generate a list of 50 beauty products for ${category}.
-Return ONLY a valid JSON array (no text outside JSON).
-Format: [
-  {"name":"Product Name","price":"$XX.XX","description":"Brief description"}
-]
-Example:
-[
-  {"name":"Hydrating Face Cream","price":"$29.99","description":"Moisturizing cream with hyaluronic acid."}
-]
-          `
+          content: `Generate ${count} unique beauty products starting at position ${offset} for category: ${category}.
+          Respond ONLY with JSON in this format:
+          [{"name":"Product Name","price":"$XX.XX","description":"Brief description"}]`
         }
       ]
     });
 
-    const replyText = claudeResponse.content?.[0]?.text || "[]";
-    const products = parseJSON(replyText);
+    const text = claudeResponse.content?.[0]?.text || "[]";
+    const products = parseJSON(text);
 
     if (products.length > 0) {
       return res.json({ products });
     }
 
-    console.warn("⚠ No products parsed from Claude response.");
-    return res.json({ products: [] });
-
+    // ✅ If Claude fails → Fallback
+    const fallback = await getOpenAIProducts(category, count, offset);
+    return res.json({ products: fallback });
   } catch (error) {
-    console.error("Claude API Error:", error.response?.data || error.message);
-    res.status(500).json({ error: "Claude API request failed" });
+    console.error("Claude API Error:", error.message);
+    const fallback = await getOpenAIProducts(category, count, offset);
+    return res.json({ products: fallback });
   }
 });
 
-// ✅ Health Check Route
+// ✅ Parse JSON safely
+function parseJSON(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return [];
+  }
+}
+
+// ✅ OpenAI fallback with pagination
+async function getOpenAIProducts(category, count, offset) {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a beauty product assistant. Respond ONLY in JSON format like:
+          [{"name":"Product Name","price":"$XX.XX","description":"Brief description"}]`
+        },
+        {
+          role: "user",
+          content: `Generate ${count} beauty products starting at position ${offset} for category: ${category}`
+        }
+      ]
+    });
+
+    const text = response.choices?.[0]?.message?.content || "[]";
+    return parseJSON(text);
+  } catch (err) {
+    console.error("OpenAI fallback error:", err.message);
+    return [];
+  }
+}
+
+// ✅ Health Check
 app.get("/", (req, res) => {
-  res.send("✅ Beauty AI Backend with Claude is running!");
+  res.send("✅ Beauty AI Backend is running");
 });
 
-// ✅ Start Server
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
