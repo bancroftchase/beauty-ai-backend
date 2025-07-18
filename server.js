@@ -8,14 +8,23 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ Initialize Claude Client
+// ✅ Claude Client
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
+
+// ✅ Utility: Safe JSON Parse
+function parseJSON(text) {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("JSON parse failed:", err.message);
+    return [];
+  }
+}
 
 // ✅ Claude API Route
 app.post("/ask-claude", async (req, res) => {
@@ -26,58 +35,49 @@ app.post("/ask-claude", async (req, res) => {
   }
 
   try {
-    console.log(`🔍 Request for category: ${category}`);
+    console.log(`🔍 Requesting products for category: ${category}`);
 
-    // Call Claude API
     const claudeResponse = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022", // ✅ Latest Sonnet model
-      max_tokens: 800,
+      model: "claude-3-5-sonnet-20241022", // ✅ Latest Claude model
+      max_tokens: 2000,
       temperature: 0.7,
       messages: [
         {
           role: "user",
-          content: `Generate a JSON array of 10 beauty products for category "${category}".
-          Each item must have:
-          - name
-          - price
-          - description
-          
-          Example format:
-          [
-            {"name": "Glow Serum", "price": "$29.99", "description": "Hydrating serum with vitamin C."},
-            {"name": "Luxury Cream", "price": "$59.99", "description": "Premium moisturizing cream for radiant skin."}
-          ]`
+          content: `
+Generate a list of 20 beauty products for ${category}.
+Return ONLY a valid JSON array (no text outside JSON).
+Format: [
+  {"name":"Product Name","price":"$XX.XX","description":"Brief description"}
+]
+Example:
+[
+  {"name":"Hydrating Face Cream","price":"$29.99","description":"Moisturizing cream with hyaluronic acid."}
+]
+          `
         }
       ]
     });
 
-    const text = claudeResponse.content?.[0]?.text || "[]";
-    const products = parseJSON(text);
+    const replyText = claudeResponse.content?.[0]?.text || "[]";
+    const products = parseJSON(replyText);
 
-    if (!products.length) {
-      return res.json({ products: [] });
+    if (products.length > 0) {
+      return res.json({ products });
     }
 
-    res.json({ products });
+    console.warn("⚠ No products parsed from Claude response.");
+    return res.json({ products: [] });
+
   } catch (error) {
-    console.error("Claude API Error:", error.message);
-    res.status(500).json({ error: "Claude API call failed" });
+    console.error("Claude API Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Claude API request failed" });
   }
 });
 
-// ✅ JSON Parser (Safe)
-function parseJSON(str) {
-  try {
-    return JSON.parse(str);
-  } catch {
-    console.warn("Invalid JSON response from Claude");
-    return [];
-  }
-}
-
-// ✅ Health Check
+// ✅ Health Check Route
 app.get("/", (req, res) => {
-  res.send("✅ Beauty AI Backend is running with Claude");
+  res.send("✅ Beauty AI Backend with Claude is running!");
 });
 
 // ✅ Start Server
