@@ -45,7 +45,7 @@ app.post("/ask-claude", async (req, res) => {
         {
           role: "user",
           content: `
-Generate a list of 20 beauty products for ${category}.
+Generate a list of 50 beauty products for ${category}.
 Return ONLY a valid JSON array (no text outside JSON).
 Format: [
   {"name":"Product Name","price":"$XX.XX","description":"Brief description"}
