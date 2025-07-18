@@ -12,21 +12,63 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Check keys at startup
-console.log("Claude Key:", process.env.CLAUDE_API_KEY ? "✅ Found" : "❌ Missing");
-console.log("OpenAI Key:", process.env.OPENAI_API_KEY ? "✅ Found" : "❌ Missing");
+// ✅ Debug keys
+console.log("Claude Key Exists:", !!process.env.CLAUDE_API_KEY);
+console.log("OpenAI Key Exists:", !!process.env.OPENAI_API_KEY);
 
-// ✅ Initialize Claude client
+// ✅ Claude client
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// ✅ Initialize OpenAI fallback client
+// ✅ OpenAI fallback
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || "",
 });
 
-// ✅ Utility: Parse JSON safely
+// ✅ Main route
+app.post("/ask-claude", async (req, res) => {
+  const { category, limit = 50, offset = 0 } = req.body;
+
+  if (!category) {
+    return res.status(400).json({ error: "Category is required" });
+  }
+
+  console.log(`🔍 Requesting Claude for category: ${category}, limit: ${limit}, offset: ${offset}`);
+
+  try {
+    // ✅ Claude request
+    const claudeResponse = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 1500,
+      messages: [
+        {
+          role: "user",
+          content: `Generate a JSON array of ${limit} beauty products starting from item #${offset + 1} for category: ${category}.
+Each object should have: name, price, description.
+Format example:
+[{"name":"Product 1","price":"$29.99","description":"Brief description"}]`,
+        },
+      ],
+    });
+
+    const replyText = claudeResponse.content?.[0]?.text || "[]";
+    let products = parseJSON(replyText);
+
+    if (products.length === 0) {
+      console.warn("⚠️ Claude returned empty. Falling back to OpenAI...");
+      products = await getOpenAIProducts(category, limit, offset);
+    }
+
+    return res.json({ products });
+  } catch (error) {
+    console.error("Claude API Error:", error.response?.data || error.message);
+    const fallback = await getOpenAIProducts(category, limit, offset);
+    return res.json({ products: fallback });
+  }
+});
+
+// ✅ Helper: parse JSON safely
 function parseJSON(text) {
   try {
     return JSON.parse(text);
@@ -35,62 +77,25 @@ function parseJSON(text) {
   }
 }
 
-// ✅ Claude + OpenAI Logic
-app.post("/ask-claude", async (req, res) => {
-  const { category, limit = 50, offset = 0 } = req.body;
-  if (!category) return res.status(400).json({ error: "Category is required" });
-
-  console.log(`🔍 Requesting Claude for category: ${category}`);
-
+// ✅ OpenAI fallback
+async function getOpenAIProducts(category, limit, offset) {
   try {
-    const claudeResponse = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 2000,
-      messages: [
-        {
-          role: "user",
-          content: `Provide ${limit} beauty products starting from item ${offset} for category: ${category}.
-          Respond ONLY with JSON in this format:
-          [{"name":"Product Name","price":"$XX.XX","description":"Short description"}]`,
-        },
-      ],
-    });
-
-    const replyText = claudeResponse.content?.[0]?.text || "[]";
-    let products = parseJSON(replyText);
-
-    if (products.length > 0) {
-      return res.json({ products });
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn("⚠️ No OpenAI key provided. Returning empty list.");
+      return [];
     }
 
-    console.log("⚠️ Claude returned empty. Falling back to OpenAI...");
-    const fallback = await getOpenAIProducts(category, limit, offset);
-    return res.json({ products: fallback });
-  } catch (error) {
-    console.error("Claude API Error:", error.message);
-    const fallback = await getOpenAIProducts(category, limit, offset);
-    return res.json({ products: fallback });
-  }
-});
-
-// ✅ OpenAI Fallback Logic
-async function getOpenAIProducts(category, limit, offset) {
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn("⚠️ No OpenAI key provided. Returning empty list.");
-    return [];
-  }
-
-  try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a beauty product expert. Respond ONLY in JSON array format: [{\"name\":\"...\",\"price\":\"$...\",\"description\":\"...\"}]",
+          content: `You are a beauty product assistant. Return ONLY a JSON array of products, no extra text.
+Each object: {"name":"Product","price":"$XX","description":"Brief description"}.`,
         },
         {
           role: "user",
-          content: `Provide ${limit} beauty products starting from ${offset} for category: ${category}`,
+          content: `Generate ${limit} beauty products starting from item #${offset + 1} for category: ${category}.`,
         },
       ],
     });
@@ -103,7 +108,7 @@ async function getOpenAIProducts(category, limit, offset) {
   }
 }
 
-// ✅ Health Check
+// ✅ Health check
 app.get("/", (req, res) => {
   res.send("✅ Beauty AI Backend is running");
 });
