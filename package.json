@@ -1,18 +1,17 @@
 {
   "name": "beauty-ai-backend",
   "version": "1.0.0",
-  "description": "Beauty AI Backend with Claude and OpenAI",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.0",
-    "openai": "^4.0.0",
-    "express": "^4.18.2",
+    "express": "^4.19.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.4.5",
+    "@anthropic-ai/sdk": "^0.18.0",
+    "openai": "^4.0.0"
   },
   "engines": {
     "node": ">=18.x"
