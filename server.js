@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -12,105 +12,114 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Debug keys
+// ✅ Debug logs for environment keys
 console.log("Claude Key Exists:", !!process.env.CLAUDE_API_KEY);
 console.log("OpenAI Key Exists:", !!process.env.OPENAI_API_KEY);
 
-// ✅ Claude client
+// ✅ Claude Client
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-// ✅ OpenAI fallback
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-});
+// ✅ OpenAI Client (Fallback)
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
-// ✅ Main route
+// ✅ Route: AI Recommendation (Claude → OpenAI fallback)
 app.post("/ask-claude", async (req, res) => {
-  const { category, limit = 50, offset = 0 } = req.body;
+  const { category } = req.body;
 
   if (!category) {
     return res.status(400).json({ error: "Category is required" });
   }
 
-  console.log(`🔍 Requesting Claude for category: ${category}, limit: ${limit}, offset: ${offset}`);
+  console.log(`🔍 Requesting Claude for category: ${category}`);
 
   try {
-    // ✅ Claude request
+    // ✅ Claude Request
     const claudeResponse = await anthropic.messages.create({
       model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1500,
+      max_tokens: 2000,
+      temperature: 0.8,
       messages: [
         {
           role: "user",
-          content: `Generate a JSON array of ${limit} beauty products starting from item #${offset + 1} for category: ${category}.
-Each object should have: name, price, description.
-Format example:
-[{"name":"Product 1","price":"$29.99","description":"Brief description"}]`,
-        },
-      ],
+          content: `Generate a list of 50 beauty products for the category "${category}".
+Respond ONLY with valid JSON array in this format:
+[
+  {"name": "Product Name", "price": "$XX.XX", "description": "Short description"},
+  ...
+]`
+        }
+      ]
     });
 
     const replyText = claudeResponse.content?.[0]?.text || "[]";
-    let products = parseJSON(replyText);
+    const products = safeParseJSON(replyText);
 
-    if (products.length === 0) {
-      console.warn("⚠️ Claude returned empty. Falling back to OpenAI...");
-      products = await getOpenAIProducts(category, limit, offset);
+    if (products.length > 0) {
+      return res.json({ products });
     }
 
-    return res.json({ products });
+    console.warn("⚠️ Claude returned empty. Falling back to OpenAI...");
+    const fallbackProducts = await getOpenAIProducts(category);
+    return res.json({ products: fallbackProducts });
+
   } catch (error) {
     console.error("Claude API Error:", error.response?.data || error.message);
-    const fallback = await getOpenAIProducts(category, limit, offset);
-    return res.json({ products: fallback });
+
+    const fallbackProducts = await getOpenAIProducts(category);
+    return res.json({ products: fallbackProducts });
   }
 });
 
-// ✅ Helper: parse JSON safely
-function parseJSON(text) {
+// ✅ Safe JSON Parser
+function safeParseJSON(text) {
   try {
     return JSON.parse(text);
-  } catch {
+  } catch (e) {
+    console.error("❌ JSON Parse Error:", e.message);
     return [];
   }
 }
 
-// ✅ OpenAI fallback
-async function getOpenAIProducts(category, limit, offset) {
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("⚠️ No OpenAI key provided. Returning empty list.");
-      return [];
-    }
+// ✅ OpenAI Fallback
+async function getOpenAIProducts(category) {
+  if (!openai) {
+    console.warn("⚠️ No OpenAI key provided. Returning empty list.");
+    return [];
+  }
 
-    const response = await openai.chat.completions.create({
+  try {
+    const openaiResponse = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are a beauty product assistant. Return ONLY a JSON array of products, no extra text.
-Each object: {"name":"Product","price":"$XX","description":"Brief description"}.`,
+          content:
+            "You are a beauty product assistant. Respond ONLY in JSON array format with this structure: [{\"name\":\"Product Name\",\"price\":\"$XX.XX\",\"description\":\"Brief description\"}]"
         },
         {
           role: "user",
-          content: `Generate ${limit} beauty products starting from item #${offset + 1} for category: ${category}.`,
-        },
-      ],
+          content: `Give me 50 beauty products for ${category}.`
+        }
+      ]
     });
 
-    const text = response.choices?.[0]?.message?.content || "[]";
-    return parseJSON(text);
+    const text = openaiResponse.choices?.[0]?.message?.content || "[]";
+    return safeParseJSON(text);
   } catch (error) {
-    console.error("OpenAI fallback error:", error.message);
+    console.error("OpenAI Fallback Error:", error.message);
     return [];
   }
 }
 
-// ✅ Health check
+// ✅ Health Check
 app.get("/", (req, res) => {
   res.send("✅ Beauty AI Backend is running");
 });
 
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
