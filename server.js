@@ -1,6 +1,13 @@
-const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk');
-require('dotenv').config();
+import express from 'express';
+import Anthropic from '@anthropic-ai/sdk';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config();
 
 const app = express();
 const anthropic = new Anthropic(process.env.ANTHROPIC_API_KEY);
@@ -14,34 +21,27 @@ app.post('/search-beauty-products', async (req, res) => {
     const prompt = `
       Find up to 50 beauty products and related items based on this user request: "${category}".
       
-      Search across these categories:
+      Search across:
       - Skincare (cleansers, moisturizers, serums, masks)
-      - Makeup (lipstick, foundation, eyeshadow, etc.)
+      - Makeup (lipstick, foundation, eyeshadow)
       - Haircare (shampoos, conditioners, treatments)
-      - Beauty accessories (brushes, combs, mirrors, organizers)
+      - Tanning products (lotions, mousses, sprays, sunless tanners)
+      - Beauty accessories (brushes, combs, mirrors)
       - Tools (hair dryers, straighteners, curlers)
       - Foot care (creams, scrubs, pedicure tools)
       - Bath & body (soaps, lotions, bath salts)
-      - Country-specific collections (K-Beauty, J-Beauty, French pharmacy, etc.)
-      - Popular brands across all categories
+      - Country-specific collections (K-Beauty, J-Beauty, French pharmacy)
+      - Popular global brands
       - Price ranges: ${priceRange || 'all'}
       - Natural, organic, or luxury products when relevant
 
-      For accessories include:
-      - Makeup brushes (foundation, eyeshadow, blending)
-      - Hair brushes (paddle, round, detangling)
-      - Combs (wide-tooth, fine-tooth, styling)
-      - Beauty sponges and applicators
-      - Eyelash curlers and tweezers
-      - Nail care tools
-
-      For foot care include:
-      - Foot creams and lotions
-      - Exfoliating scrubs
-      - Callus removers
-      - Pedicure sets
-      - Toe separators
-      - Foot masks
+      For tanning include:
+      - Self-tanners
+      - Bronzers
+      - Tanning oils
+      - Gradual tanners
+      - Tan extenders
+      - Tan removers
 
       Respond ONLY in JSON format:
       [{
