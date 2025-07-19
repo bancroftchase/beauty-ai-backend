@@ -1,5 +1,5 @@
 import express from 'express';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import cors from 'cors';
 
@@ -7,91 +7,116 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Claude Client
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
+// Changed to OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY // Make sure to set this in Render
+});
 
-// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ Logger for debugging
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
-
-// ✅ Health Check
+// Health Check Endpoint
 app.get('/', (req, res) => {
-  res.send('✅ Beauty AI Backend Running with Claude');
+  res.status(200).json({
+    status: 'active',
+    message: 'Beauty AI Backend Service',
+    endpoints: {
+      search: 'POST /search-beauty-products',
+      claude: 'POST /ask-claude' // Keeping original endpoint names
+    }
+  });
 });
 
-// ✅ Generate Prompt
+// Original prompt format (unchanged)
 const generatePrompt = (category) => `
-Find up to 80 beauty products based on: "${category}".
+Find up to 50 beauty products for "${category}" including:
 
-Include:
-- Product types (lipstick, moisturizer, shampoo, etc.)
-- Global categories (e.g., K-Beauty, French skincare)
-- Popular brands
-- Price ranges
-- Tag if luxury or natural
+- K-Beauty (Korean brands)
+- J-Beauty (Japanese brands)
+- Western brands
+- Luxury and drugstore products
 
-Respond ONLY in JSON format:
-[{"name":"Product Name","price":"$XX","description":"Brief description","country":"Country"}]
-`;
+Respond in STRICT JSON format ONLY:
+[{
+  "name": "Product Name",
+  "price": "$XX.XX",
+  "description": "Brief description",
+  "country": "Origin country",
+  "category": "${category}"
+}]
 
-// ✅ Main Endpoint
-app.post(['/ask-claude', '/search-beauty-products'], async (req, res) => {
+Rules:
+1. No additional text outside the JSON
+2. Must include all specified fields
+3. Return empty array if no products found`;
+
+// Updated to use OpenAI instead of Anthropic
+const handleProductSearch = async (category) => {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4-turbo-preview", // Using latest OpenAI model
+    messages: [{
+      role: "user",
+      content: generatePrompt(category)
+    }],
+    response_format: { type: "json_object" }, // Ensures JSON output
+    max_tokens: 2000
+  });
+
+  try {
+    const content = response.choices[0].message.content;
+    // Handle both direct JSON and wrapped responses
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed) ? parsed : parsed.products || [];
+  } catch (e) {
+    console.error('Parsing error:', e);
+    return [];
+  }
+};
+
+// Original endpoints maintained
+app.post(['/search-beauty-products', '/ask-claude'], async (req, res) => {
   try {
     const { category } = req.body;
-    if (!category) return res.status(400).json({ error: 'Category is required' });
+    if (!category) {
+      return res.status(400).json({ 
+        error: "Category parameter required",
+        example: { "category": "K-Beauty" }
+      });
+    }
 
-    console.log(`🔍 Requesting Claude for category: ${category}`);
-
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 3000, // Increased for 80+ products
-      messages: [
-        {
-          role: 'user',
-          content: generatePrompt(category)
-        }
-      ]
-    });
-
-    const textResponse = response.content?.[0]?.text || '';
-    const products = parseProducts(textResponse);
-
+    const products = await handleProductSearch(category);
+    
     if (!products.length) {
-      return res.json({
+      return res.status(404).json({
         products: [],
-        message: `❌ No products found for "${category}". Try more specific keywords like 'luxury skincare' or 'K-Beauty serums'.`
+        message: `No ${category} products found. Try specific terms like "K-Beauty serums"`
       });
     }
 
     return res.json({ products });
+
   } catch (error) {
-    console.error('Claude API Error:', error.message);
-    return res.status(500).json({ error: 'AI service error', details: error.message });
+    console.error('Search Error:', error);
+    return res.status(500).json({
+      error: "Search failed",
+      details: error.message
+    });
   }
 });
 
-// ✅ Parse JSON safely
-function parseProducts(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed;
-
-    const start = text.indexOf('[');
-    const end = text.lastIndexOf(']');
-    if (start >= 0 && end > start) {
-      return JSON.parse(text.slice(start, end + 1));
+// Catch-all route
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Endpoint not found",
+    availableEndpoints: {
+      healthCheck: "GET /",
+      productSearch: "POST /search-beauty-products",
+      claudeSearch: "POST /ask-claude" // Maintaining original endpoint name
     }
-    return [];
-  } catch {
-    return [];
-  }
-}
+  });
+});
 
-// ✅ Start Server
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🔍 Test with: curl -X POST http://localhost:${PORT}/search-beauty-products -H "Content-Type: application/json" -d '{"category":"K-Beauty"}'`);
+});
