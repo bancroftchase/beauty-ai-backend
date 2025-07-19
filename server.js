@@ -10,14 +10,40 @@ const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 app.use(cors());
 app.use(express.json());
 
+function parseClaudeResponse(text) {
+  // 1. First try direct JSON parse
+  try {
+    return JSON.parse(text);
+  } catch (e) { /* Continue to other methods */ }
+
+  // 2. Try extracting JSON from markdown code block
+  const jsonBlock = text.match(/```json\n([\s\S]*?)\n```/)?.[1];
+  if (jsonBlock) {
+    try {
+      return JSON.parse(jsonBlock);
+    } catch (e) { /* Continue */ }
+  }
+
+  // 3. Try extracting just the array portion
+  const arrayStart = text.indexOf('[');
+  const arrayEnd = text.lastIndexOf(']');
+  if (arrayStart > -1 && arrayEnd > -1) {
+    try {
+      return JSON.parse(text.slice(arrayStart, arrayEnd + 1));
+    } catch (e) { /* Continue */ }
+  }
+
+  // 4. Final fallback - return empty array
+  console.warn('Could not parse response:', text);
+  return [];
+}
+
 app.post('/ask-claude', async (req, res) => {
   try {
     const { category } = req.body;
     
-    // STRICTER PROMPT ENGINEERING
-    const prompt = `Provide exactly 10 beauty products for "${category}" in this EXACT JSON format:
-    
-\`\`\`json
+    const prompt = `Provide 10 beauty products for "${category}" in this EXACT format:
+
 [
   {
     "name": "Product Name",
@@ -26,13 +52,11 @@ app.post('/ask-claude', async (req, res) => {
     "country": "Origin country"
   }
 ]
-\`\`\`
 
-Requirements:
+Rules:
 1. Only return the JSON array
-2. No additional text before or after
-3. Include all 4 fields for each product
-4. Products must relate to "${category}"`;
+2. No additional text or explanations
+3. All fields must be included`;
 
     const response = await anthropic.messages.create({
       model: "claude-3-5-sonnet-20241022",
@@ -40,22 +64,22 @@ Requirements:
       messages: [{ role: "user", content: prompt }]
     });
 
-    // More robust parsing
-    const jsonString = response.content[0].text.replace(/```json|```/g, '').trim();
-    const products = JSON.parse(jsonString);
+    const products = parseClaudeResponse(response.content[0].text);
 
-    if (!Array.isArray(products) || products.length === 0) {
-      throw new Error('No valid products found in response');
+    if (!products.length) {
+      return res.status(404).json({ 
+        error: "No products found",
+        solution: "Try different search terms like 'tanning lotion' or 'moisturizer'"
+      });
     }
 
     return res.json({ products });
-    
+
   } catch (error) {
-    console.error('Error:', error);
+    console.error('API Error:', error);
     return res.status(500).json({ 
-      error: "Failed to fetch products",
-      details: error.message,
-      solution: "Try rephrasing your search or check the logs"
+      error: "Search failed",
+      details: error.message
     });
   }
 });
