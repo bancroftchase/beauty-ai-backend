@@ -5,12 +5,13 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "install-deps": "npm install openai@^4.28.0 express cors dotenv"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "@anthropic-ai/sdk": "^0.15.0",
+    "openai": "^4.28.0",
     "dotenv": "^16.3.1"
   },
   "engines": {
