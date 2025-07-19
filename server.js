@@ -3,11 +3,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 import cors from 'cors';
 
+// 1. Load environment variables FIRST
 dotenv.config();
 
+// 2. Verify API key is loaded
+console.log('API Key:', process.env.ANTHROPIC_API_KEY ? 'Loaded' : 'Missing');
+
 const app = express();
+
+// 3. Initialize Anthropic with proper config
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY // MUST be set in Render
+  apiKey: process.env.ANTHROPIC_API_KEY
 });
 
 app.use(cors());
@@ -17,11 +23,8 @@ app.post('/search-beauty-products', async (req, res) => {
   try {
     const { category } = req.body;
     
-    if (!category) {
-      return res.status(400).json({ error: "Category parameter is required" });
-    }
-
-    const prompt = `Find beauty products about ${category} in JSON format: [{
+    const prompt = `Find beauty products about ${category} in JSON format exactly like:
+    [{
       "name": "Product Name",
       "price": "$XX",
       "description": "Brief description",
@@ -34,23 +37,18 @@ app.post('/search-beauty-products', async (req, res) => {
       messages: [{ role: "user", content: prompt }]
     });
 
-    try {
-      const products = JSON.parse(response.content[0].text);
-      res.json(products);
-    } catch (parseError) {
-      console.error('Parse error:', parseError);
-      res.status(500).json({ error: "Failed to parse products" });
-    }
+    const products = JSON.parse(response.content[0].text);
+    res.json(products);
+    
   } catch (error) {
-    console.error('API error:', error);
+    console.error('Full error:', error);
     res.status(500).json({ 
-      error: "Failed to fetch products",
-      details: error.message 
+      error: "Beauty search failed",
+      details: error.message,
+      hint: "Check Render environment variables"
     });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server ready on ${PORT}`));
