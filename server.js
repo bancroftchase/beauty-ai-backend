@@ -7,30 +7,21 @@ dotenv.config();
 
 const app = express();
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY // Must be set in Render environment
+  apiKey: process.env.ANTHROPIC_API_KEY // MUST be set in Render
 });
 
-// Enhanced CORS configuration
-app.use(cors({
-  origin: '*',
-  methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type']
-}));
-
+app.use(cors());
 app.use(express.json());
-
-// Handle preflight requests
-app.options('/search-beauty-products', cors());
 
 app.post('/search-beauty-products', async (req, res) => {
   try {
     const { category } = req.body;
-
+    
     if (!category) {
       return res.status(400).json({ error: "Category parameter is required" });
     }
 
-    const prompt = `Provide 10 beauty products about ${category} in JSON format: [{
+    const prompt = `Find beauty products about ${category} in JSON format: [{
       "name": "Product Name",
       "price": "$XX",
       "description": "Brief description",
